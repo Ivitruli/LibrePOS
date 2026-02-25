@@ -9,6 +9,7 @@
 <script src="chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="node_modules/jsbarcode/dist/JsBarcode.all.min.js"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -95,31 +96,47 @@
 
 <section class="section" id="sec-compras">
   <div class="card">
-    <div class="card-title">Registrar lote de compra</div>
+    <div class="card-title">1. Datos del Comprobante / Remito</div>
     <div class="form-grid">
-      <div class="form-group"><label>Código de barras / interno *</label><input type="text" id="comp-barcode" placeholder="Escaneá o escribí" onblur="buscarProdCompra()"></div>
-      <div class="form-group"><label>Producto (autocompletado)</label><input type="text" id="comp-prod-nombre" readonly style="background:var(--surface2);" placeholder="—"><input type="hidden" id="comp-prod-id"></div>
+      <div class="form-group"><label>Proveedor *</label><select id="comp-proveedor"></select></div>
+      <div class="form-group"><label>Nº Comprobante / Detalle</label><input type="text" id="comp-comprobante" placeholder="Ej: Factura A 0001-1234"></div>
       <div class="form-group"><label>Fecha *</label><input type="date" id="comp-fecha"></div>
-      <div class="form-group"><label>Vencimiento</label><input type="date" id="comp-venc"></div>
-      <div class="form-group"><label>Cantidad *</label><input type="number" id="comp-cantidad" step="0.001" min="0" placeholder="0"></div>
-      <div class="form-group"><label>Costo unitario ($) *</label><input type="number" id="comp-costo" step="0.01" min="0" placeholder="0.00" oninput="calcularPrecio()"></div>
       <div class="form-group"><label>Estado del Pago</label>
         <select id="comp-pago" onchange="togglePagoCompra(this.value)"><option value="pagado">Pagado ahora</option><option value="adeudado">A cuenta (Deuda)</option></select>
       </div>
       <div class="form-group" id="comp-cuenta-wrap"><label>Pagado desde cuenta</label><select id="comp-cuenta"></select></div>
     </div>
-    <div class="precio-calc">
-      <div style="font-size:.71rem;font-weight:600;text-transform:uppercase;color:var(--amber);margin-bottom:.72rem;">📊 Calculadora de precio de venta</div>
-      <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));">
-        <div class="form-group"><label>+Fijo ($)</label><input type="number" id="calc-fijo" value="0" step="0.01" oninput="calcularPrecio()"></div>
-        <div class="form-group"><label>+Impuestos (%)</label><input type="number" id="calc-imp" value="0" step="0.1" oninput="calcularPrecio()"></div>
-        <div class="form-group"><label>+Ganancia (%)</label><input type="number" id="calc-gan" value="30" step="0.1" oninput="calcularPrecio()"></div>
-        <div class="form-group"><label>−Descuento (%)</label><input type="number" id="calc-desc" value="0" step="0.1" oninput="calcularPrecio()"></div>
-        <div class="form-group"><label>Precio final ▲ ($)</label><input type="number" id="comp-precio" step="10" style="border-color:var(--amber);font-weight:600;font-size:1.1rem;" placeholder="0"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">2. Agregar Productos al Comprobante</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Código de barras / interno *</label>
+        <div style="display:flex;gap:5px;">
+          <input type="text" id="comp-barcode" placeholder="Escaneá o escribí" onblur="buscarProdCompra()">
+          <button class="btn btn-secondary" onclick="document.getElementById('comp-barcode').value = compras.generarCodigoInterno(); buscarProdCompra();" title="Generar código interno automático">⚙️</button>
+        </div>
       </div>
-      <div id="precio-result-txt" style="font-size:.78rem;color:var(--amber);margin-top:.52rem;font-family:'DM Mono',monospace;font-weight:600;"></div>
+      <div class="form-group"><label>Producto (autocompletado)</label><input type="text" id="comp-prod-nombre" readonly style="background:var(--surface2);" placeholder="—"><input type="hidden" id="comp-prod-id"></div>
+      <div class="form-group"><label>Cantidad *</label><input type="number" id="comp-cantidad" step="0.001" min="0" placeholder="0"></div>
+      <div class="form-group"><label>Costo unitario ($) *</label><input type="number" id="comp-costo" step="0.01" min="0" placeholder="0.00"></div>
+      <div class="form-group"><label>Vencimiento</label><input type="date" id="comp-venc"></div>
     </div>
-    <div style="margin-top:1.05rem;"><button class="btn btn-primary" onclick="registrarCompra()">Registrar compra e ingresar a stock</button></div>
+    
+    <div style="margin-top:1rem; text-align:right;">
+      <button class="btn btn-secondary" onclick="agregarItemRemito()">+ Añadir al listado</button>
+    </div>
+
+    <table style="margin-top:15px;">
+      <thead><tr><th>Código</th><th>Producto</th><th>Cant.</th><th>Costo U.</th><th>Subtotal</th><th>Venc.</th><th></th></tr></thead>
+      <tbody id="tabla-remito-items"></tbody>
+    </table>
+
+    <div style="margin-top:1.5rem; padding-top:1rem; border-top:2px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+      <div style="font-size:1.2rem; font-weight:bold;">Total Remito: <span class="mono" id="comp-total-remito">$0.00</span></div>
+      <button class="btn btn-primary" onclick="confirmarRemitoCompleto()">Registrar Compra y Actualizar Stock</button>
+    </div>
   </div>
 </section>
 
@@ -133,22 +150,38 @@
     </div>
     <div class="info-tooltip">Se aplica en POS al elegir Efectivo. Productos con "Venta al Costo" o "−Desc%" propio en la tabla de abajo NO reciben este descuento extra.</div>
   </div>
+  
   <div class="card">
     <div class="card-title">Catálogo — Modificación y Precios</div>
-    <div style="display:flex;gap:.5rem;margin-bottom:.95rem;"><input type="text" id="stock-search" placeholder="🔍 Buscar por nombre, marca, código..." oninput="renderTablaProductos()" style="flex:1;"></div>
+    
+    <div style="display:flex;gap:.5rem;margin-bottom:.95rem; align-items:center; flex-wrap:wrap;">
+      <input type="text" id="stock-search" placeholder="🔍 Buscar por nombre, marca, código..." oninput="renderTablaProductos()" style="flex:1; min-width:200px;">
+      <select id="stock-sort" onchange="renderTablaProductos()" style="max-width:200px;">
+         <option value="nombre">Ordenar por Nombre</option>
+         <option value="venc">Ordenar por Vencimiento</option>
+         <option value="prov">Ordenar por Proveedor</option>
+      </select>
+      <button class="btn btn-amber" onclick="abrirModalPreciosDesactualizados()">⚠️ Revisar Precios en Góndola</button>
+    </div>
+    
     <div style="overflow-x:auto;">
     <table id="tabla-stock-cat">
       <thead><tr>
-        <th>Proveedor</th><th>Código</th><th>Nombre</th><th>Unidad</th><th>Stock Min.</th>
-        <th>Stock Real</th><th>Costo</th><th>+Fijo$</th><th>+Imp%</th><th>+Gan%</th><th>−Desc%</th>
+        <th>Código</th><th>Nombre</th><th>Unidad</th><th>Stock Min.</th>
+        <th>Stock Real</th><th>Costo Alto</th><th>+Fijo$</th><th>+Imp%</th><th>+Gan%</th><th>−Desc%</th>
         <th title="Ignora ganancia y descuento">Al Costo</th><th>Precio final</th>
         <th>Acciones</th>
       </tr></thead>
       <tbody id="tabla-productos"></tbody>
     </table>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.75rem;">
-      <button class="btn btn-blue" onclick="abrirRetiroSocio()">📦 Retiro de Socios</button>
+    
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.75rem; flex-wrap:wrap; gap:.5rem;">
+      <div style="display:flex; gap:.5rem;">
+        <button class="btn btn-blue" onclick="abrirRetiroSocio()">📦 Retiro de Socios</button>
+        <button class="btn btn-purple" onclick="abrirModalMuestras()">🎁 Muestras/Sorteos</button>
+        <button class="btn btn-secondary" onclick="imprimirCodigosBarra()">🖨️ Códigos de Barras</button>
+      </div>
       <button class="btn btn-green" onclick="guardarPreciosTodos()">💾 Guardar cambios de precios</button>
     </div>
   </div>
@@ -217,6 +250,17 @@
 </section>
 
 <section class="section" id="sec-gastos">
+  <div class="card" style="margin-bottom: 1rem; border-left: 4px solid var(--accent);">
+    <div class="card-title">Logística: Envíos Pendientes (Cadetería)</div>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+       <div style="font-size:1.2rem; font-weight:bold;">Acumulado a pagar: <span id="envios-pendientes-total" class="mono" style="color:var(--accent);">$0.00</span></div>
+       <div style="display:flex; gap:10px; align-items:center;">
+          <select id="envios-cuenta"></select>
+          <button class="btn btn-primary" onclick="pagarCadete()">Liquidar a Cadete</button>
+       </div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-title">Registrar gasto</div>
     <div class="form-grid">
@@ -408,11 +452,15 @@
   <div class="modal">
     <h2>Producto no encontrado — Registrar</h2>
     <div class="form-grid">
-      <div class="form-group"><label>Código interno *</label><input type="text" id="np-codigo"></div>
+      <div class="form-group">
+        <label>Código interno / Barras *</label>
+        <div style="display:flex;gap:5px;">
+            <input type="text" id="np-codigo">
+            <button class="btn btn-secondary" onclick="document.getElementById('np-codigo').value = compras.generarCodigoInterno()" title="Generar código interno automático">⚙️</button>
+        </div>
+      </div>
       <div class="form-group"><label>Nombre *</label><input type="text" id="np-nombre"></div>
-      <div class="form-group"><label>Código de barras</label><input type="text" id="np-barcode" readonly style="background:var(--surface2);"></div>
       <div class="form-group"><label>Marca</label><input type="text" id="np-marca"></div>
-      <div class="form-group"><label>Proveedor</label><select id="np-proveedor"></select></div>
       <div class="form-group"><label>Unidad</label><select id="np-unidad"><option value="unidad">Unidad</option><option value="kg">Kg</option><option value="100g">100g</option></select></div>
     </div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="document.getElementById('modal-np').classList.remove('open')">Cancelar</button><button class="btn btn-primary" onclick="guardarNuevoProd()">Registrar</button></div>
@@ -429,7 +477,6 @@
       <div class="form-group"><label>Unidad de medida</label><select id="ep-prod-unidad"><option value="unidad">Unidad</option><option value="kg">Kg</option><option value="100g">100g</option></select></div>
       <div class="form-group"><label>Marca</label><input type="text" id="ep-prod-marca"></div>
       <div class="form-group"><label>Stock Mínimo</label><input type="number" id="ep-prod-min" step="0.001"></div>
-      <div class="form-group"><label>Proveedor</label><select id="ep-prod-proveedor"></select></div>
     </div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="document.getElementById('modal-edit-prod').classList.remove('open')">Cancelar</button><button class="btn btn-primary" onclick="guardarEditProd()">Guardar cambios</button></div>
   </div>
@@ -455,7 +502,8 @@
     <h2>Pagar Deuda a Proveedor</h2>
     <input type="hidden" id="pd-id">
     <div class="form-grid">
-      <div class="form-group"><label>Monto a pagar ahora ($)</label><input type="number" id="pd-monto" step="0.01"></div>
+      <div class="form-group"><label>Monto a pagar ahora ($)</label><input type="number" id="pd-monto" step="0.01" value="0"></div>
+      <div class="form-group"><label>Descuento obtenido ($)</label><input type="number" id="pd-descuento" step="0.01" value="0" placeholder="Ej: 500"></div>
       <div class="form-group"><label>Desde cuenta</label><select id="pd-cuenta"></select></div>
     </div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="document.getElementById('modal-pago-deuda').classList.remove('open')">Cancelar</button><button class="btn btn-primary" onclick="confirmarPagoDeuda()">Registrar Pago</button></div>
@@ -478,6 +526,36 @@
     </div>
     <div class="info-tooltip">Calcula el Costo (CMV) PEPS y se resta del saldo personal del socio (si se elige descontar).</div>
     <div class="modal-actions"><button class="btn btn-secondary" onclick="document.getElementById('modal-retiro-socio').classList.remove('open')">Cancelar</button><button class="btn btn-blue" onclick="confirmarRetiroSocio()">Registrar Salida</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-muestras">
+  <div class="modal">
+    <h2>🎁 Registrar Muestra o Sorteo</h2>
+    <div class="form-grid">
+      <div class="form-group"><label>Producto *</label><select id="mu-prod"></select></div>
+      <div class="form-group"><label>Cantidad *</label><input type="number" id="mu-qty" step="0.001" min="0"></div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="mu-fecha"></div>
+    </div>
+    <div class="info-tooltip">Esta mercadería se descontará del stock (PEPS) y se imputará automáticamente como un gasto de "Publicidad / Muestras".</div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="document.getElementById('modal-muestras').classList.remove('open')">Cancelar</button><button class="btn btn-purple" onclick="confirmarMuestra()">Registrar Gasto</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-precios">
+  <div class="modal" style="max-width:600px;">
+    <h2>⚠️ Precios Desactualizados en Góndola</h2>
+    <div class="info-tooltip">Listado de productos con stock cuyo precio calculado actual difiere del último marcado. Actualizá la etiqueta en el local y marcá "Listo".</div>
+    <div style="max-height:300px; overflow-y:auto;">
+      <table style="margin-bottom:0;">
+        <thead><tr><th>Producto</th><th>Precio Anterior</th><th>Nuevo Sugerido</th><th>Acción</th></tr></thead>
+        <tbody id="tabla-precios-desact"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:15px;">
+        <button class="btn btn-secondary" onclick="document.getElementById('modal-precios').classList.remove('open')">Cerrar</button>
+        <button class="btn btn-primary" onclick="generarPDFEtiquetas()">Imprimir Códigos (PDF)</button>
+    </div>
   </div>
 </div>
 

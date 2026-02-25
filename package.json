@@ -1,0 +1,12 @@
+{
+  "name": "librepos",
+  "version": "1.0.0",
+  "description": "Punto de Venta y Gestión",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^40.6.0"
+  }
+}

@@ -83,10 +83,92 @@ const reportes = {
             if (a.tipo === 'ingreso') asientos.push({ f: a.fecha + 'T00:05', r: rDesc, ls: [{ c: etiq(cName, 'A', true), d: a.diferencia, h: 0 }, { c: etiq('Ajuste / Resultado Positivo', 'R+', false), d: 0, h: a.diferencia }] });
             else asientos.push({ f: a.fecha + 'T00:05', r: rDesc, ls: [{ c: etiq('Ajuste / Resultado Negativo', 'R-', true), d: Math.abs(a.diferencia), h: 0 }, { c: etiq(cName, 'A', false), d: 0, h: Math.abs(a.diferencia) }] });
         });
+
+        if (store.db.transferencias) {
+            store.db.transferencias.filter(t => t.fecha >= desde && t.fecha <= hasta).forEach(t => {
+                let cOrig = store.db.cuentas.find(c => c.id === t.origenId)?.nombre || 'Caja';
+                let cDest = store.db.cuentas.find(c => c.id === t.destinoId)?.nombre || 'Caja';
+                asientos.push({ f: t.fecha + 'T00:06', r: 'Transferencia Interna de Fondos', ls: [{ c: etiq(cDest, 'A', true), d: t.monto, h: 0 }, { c: etiq(cOrig, 'A', false), d: 0, h: t.monto }] });
+            });
+        }
         
         return asientos.sort((a, b) => a.f.localeCompare(b.f));
     },
 
+    getProximosVencimientos: function(diasTarget) {
+        const hoy = new Date();
+        const limite = new Date(hoy.getTime() + diasTarget * 86400000);
+        const limiteStr = limite.toISOString().slice(0, 10);
+        const hoyStr = hoy.toISOString().slice(0, 10);
+
+        let resultados = [];
+        store.db.lotes.filter(l => l.cantDisponible > 0 && l.vencimiento).forEach(l => {
+            if (l.vencimiento <= limiteStr) {
+                const p = store.db.productos.find(x => x.id === l.productoId);
+                if (!p || p.deleted) return;
+                const prov = store.db.proveedores.find(x => x.id === l.proveedorId)?.nombre || 'Sin Proveedor';
+                const diffTime = Math.ceil((new Date(l.vencimiento) - new Date(hoyStr)) / (1000 * 60 * 60 * 24));
+                
+                resultados.push({
+                    producto: p.nombre,
+                    proveedor: prov,
+                    vencimiento: l.vencimiento,
+                    stock: l.cantDisponible,
+                    unidad: p.unidad,
+                    diasRestantes: diffTime
+                });
+            }
+        });
+        return resultados.sort((a, b) => a.vencimiento.localeCompare(b.vencimiento));
+    },
+
+    generarAnalisisPromociones: function(topK = 10) {
+        const transacciones = store.db.ventas.map(v => 
+            store.db.ventaItems.filter(vi => vi.ventaId === v.id).map(vi => vi.productoId)
+        ).filter(t => t.length > 1); // Solo ventas múltiples
+
+        const frecuencias = {};
+        const itemNames = {};
+        const itemPrices = {};
+
+        store.db.productos.filter(p => !p.deleted).forEach(p => {
+            itemNames[p.id] = p.nombre;
+            itemPrices[p.id] = inventario.calcPrecioFinal(p.id);
+        });
+
+        transacciones.forEach(t => {
+            const itemsUnicos = [...new Set(t)].sort();
+            for (let i = 0; i < itemsUnicos.length; i++) {
+                for (let j = i + 1; j < itemsUnicos.length; j++) {
+                    const key2 = `${itemsUnicos[i]}|${itemsUnicos[j]}`;
+                    frecuencias[key2] = (frecuencias[key2] || 0) + 1;
+                    
+                    // Combinaciones de 3 productos
+                    for (let k = j + 1; k < itemsUnicos.length; k++) {
+                         const key3 = `${itemsUnicos[i]}|${itemsUnicos[j]}|${itemsUnicos[k]}`;
+                         frecuencias[key3] = (frecuencias[key3] || 0) + 1;
+                    }
+                }
+            }
+        });
+
+        const combinaciones = Object.keys(frecuencias)
+            .map(k => {
+                const ids = k.split('|');
+                if (ids.some(id => !itemNames[id])) return null; // Ignorar si hay productos borrados
+                const nombres = ids.map(id => itemNames[id]).join(' + ');
+                const precioNormal = ids.reduce((sum, id) => sum + (itemPrices[id] || 0), 0);
+                const descSugerido = precioNormal * 0.15; // Sugerencia fija del 15%
+                return { nombres, frecuencia: frecuencias[k], precioNormal, precioPromo: precioNormal - descSugerido, descSugerido };
+            })
+            .filter(c => c && c.frecuencia > 1)
+            .sort((a, b) => b.frecuencia - a.frecuencia)
+            .slice(0, topK);
+
+        return combinaciones;
+    },
+
+    // ... (Mantengo las funciones de PDF intactas abajo) ...
     generarPDFPedidos: function() {
         if (!window.jspdf) throw new Error('Biblioteca jsPDF no cargada');
         const { jsPDF } = window.jspdf; const doc = new jsPDF(); const cfg = store.db.config; let y = 15;
@@ -158,16 +240,13 @@ const reportes = {
                 try {
                     const canvas = document.createElement('canvas');
                     window.JsBarcode(canvas, codigo, { format: "CODE128", width: 2, height: 45, displayValue: true, fontSize: 14, margin: 0 });
-                    const imgData = canvas.toDataURL("image/png"); // Usar PNG sin pérdida
-                    
-                    // Cálculo de aspecto ratio para evitar estiramiento
+                    const imgData = canvas.toDataURL("image/png");
                     const imgP = doc.getImageProperties(imgData);
                     const maxW = 50; const maxH = 17;
                     const ratio = Math.min(maxW / imgP.width, maxH / imgP.height);
                     const finalW = imgP.width * ratio;
                     const finalH = imgP.height * ratio;
                     const centerX = x + 5 + (maxW - finalW) / 2;
-
                     doc.addImage(imgData, 'PNG', centerX, y + 15, finalW, finalH);
                 } catch(e) {}
             }
@@ -199,16 +278,13 @@ const reportes = {
             try {
                 const canvas = document.createElement('canvas');
                 window.JsBarcode(canvas, codigo, { format: "CODE128", width: 2, height: 45, displayValue: true, fontSize: 14, margin: 0 });
-                const imgData = canvas.toDataURL("image/png"); // Usar PNG sin pérdida
-                
-                // Cálculo de aspecto ratio para centrado perfecto
+                const imgData = canvas.toDataURL("image/png");
                 const imgP = doc.getImageProperties(imgData);
                 const maxW = 50; const maxH = 22;
                 const ratio = Math.min(maxW / imgP.width, maxH / imgP.height);
                 const finalW = imgP.width * ratio;
                 const finalH = imgP.height * ratio;
                 const centerX = x + 5 + (maxW - finalW) / 2;
-
                 doc.addImage(imgData, 'PNG', centerX, y + 9, finalW, finalH);
             } catch(e) {}
             

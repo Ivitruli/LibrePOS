@@ -188,19 +188,40 @@
 </section>
 
 <section class="section" id="sec-ventas">
-  <div class="card">
-    <div class="card-title">Listado de ventas</div>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.9rem;">
-      <input type="date" id="vent-f-desde" style="max-width:150px;"> <input type="date" id="vent-f-hasta" style="max-width:150px;">
-      <select id="vent-filtro-medio" style="max-width:165px;"><option value="">Todos los medios</option></select>
-      <select id="vent-filtro-fact" style="max-width:165px;"><option value="">Todas</option><option value="si">Facturadas</option><option value="no">Sin facturar</option></select>
-      <button class="btn btn-secondary btn-sm" onclick="renderTablaVentas()">Filtrar</button>
+  <div class="tabs-row">
+    <button class="tab-pill active" onclick="showVentTab('list',this)">Historial de Ventas</button>
+    <button class="tab-pill" onclick="showVentTab('promo',this)">Análisis de Promociones</button>
+  </div>
+
+  <div id="vent-list" class="vent-tab active">
+    <div class="card">
+      <div class="card-title">Listado de ventas</div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.9rem;">
+        <input type="date" id="vent-f-desde" style="max-width:150px;"> <input type="date" id="vent-f-hasta" style="max-width:150px;">
+        <select id="vent-filtro-medio" style="max-width:165px;"><option value="">Todos los medios</option></select>
+        <select id="vent-filtro-fact" style="max-width:165px;"><option value="">Todas</option><option value="si">Facturadas</option><option value="no">Sin facturar</option></select>
+        <button class="btn btn-secondary btn-sm" onclick="renderTablaVentas()">Filtrar</button>
+      </div>
+      <table>
+        <thead><tr><th>Fecha/Hora</th><th>Productos</th><th>Total</th><th>Desc. ef.</th><th>Medio</th><th>Facturada</th></tr></thead>
+        <tbody id="tabla-ventas-menu"></tbody>
+      </table>
+      <div id="ventas-resumen-row" style="text-align:right;padding:.7rem;font-family:'DM Mono',monospace;font-weight:600;"></div>
     </div>
-    <table>
-      <thead><tr><th>Fecha/Hora</th><th>Productos</th><th>Total</th><th>Desc. ef.</th><th>Medio</th><th>Facturada</th></tr></thead>
-      <tbody id="tabla-ventas-menu"></tbody>
-    </table>
-    <div id="ventas-resumen-row" style="text-align:right;padding:.7rem;font-family:'DM Mono',monospace;font-weight:600;"></div>
+  </div>
+
+  <div id="vent-promo" class="vent-tab" style="display:none;">
+    <div class="card">
+      <div class="card-title">Promociones Sugeridas (Market Basket Analysis)</div>
+      <div class="info-tooltip">Calcula las agrupaciones de productos que se venden juntos con mayor frecuencia. Utilizá esta información para armar promociones (Ej: "Llevando X e Y, 10% de descuento").</div>
+      <div style="margin-top:.85rem;margin-bottom:1rem;">
+         <button class="btn btn-primary" onclick="generarAnalisisPromociones()">Ejecutar Análisis</button>
+      </div>
+      <table>
+        <thead><tr><th>Combinación Sugerida</th><th>Ventas Conjuntas</th><th>Descuento Sugerido</th></tr></thead>
+        <tbody id="tabla-promociones"><tr><td colspan="3" style="text-align:center;color:var(--muted)">Ejecutá el análisis para ver el Top 10.</td></tr></tbody>
+      </table>
+    </div>
   </div>
 </section>
 
@@ -304,6 +325,20 @@
       </div>
     </div>
   </div>
+  
+  <div class="card">
+    <div class="card-title">🔄 Transferencia entre Cuentas</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Cuenta de Origen *</label><select id="transf-origen"></select></div>
+      <div class="form-group"><label>Cuenta de Destino *</label><select id="transf-destino"></select></div>
+      <div class="form-group"><label>Monto a transferir ($) *</label><input type="number" id="transf-monto" step="0.01" min="0.01"></div>
+      <div class="form-group"><label>Fecha *</label><input type="date" id="transf-fecha"></div>
+    </div>
+    <div style="margin-top:1rem;">
+      <button class="btn btn-blue" onclick="registrarTransferencia()">Registrar Movimiento</button>
+    </div>
+  </div>
+
   <div class="card"><div class="card-title">Cashflow Semanal (Últimos 30 días)</div><div class="chart-container"><canvas id="chart-cashflow"></canvas></div></div>
 </section>
 
@@ -348,21 +383,21 @@
 </section>
 
 <section class="section" id="sec-informes">
-  <div class="report-controls">
-    <div class="form-group"><label>Desde</label><input type="date" id="inf-desde"></div>
-    <div class="form-group"><label>Hasta</label><input type="date" id="inf-hasta"></div>
-    <button class="btn btn-primary" onclick="generarInforme()">Generar informe en pantalla</button>
-    <button class="btn btn-secondary" onclick="generarListaPrecios()"><span style="color:var(--accent)">📄 PDF</span> Lista Precios</button>
-    <button class="btn btn-secondary" onclick="generarPDFPedidos()"><span style="color:var(--blue)">📦 PDF</span> Pedidos</button>
-  </div>
-  
-  <div id="informe-body" style="display:none">
-    <div class="tabs-row">
+  <div id="informe-body">
+    <div class="tabs-row" style="margin-bottom:1rem;">
       <button class="tab-pill active" onclick="showInfTab('resumen',this)">Resumen de Ventas</button>
-      <button class="tab-pill" onclick="showInfTab('diario',this)">Libro Diario (Partida Doble)</button>
+      <button class="tab-pill" onclick="showInfTab('diario',this)">Libro Diario</button>
+      <button class="tab-pill" onclick="showInfTab('vencimientos',this)">Próximos Vencimientos</button>
     </div>
     
     <div id="inf-resumen" class="inf-tab active">
+      <div class="report-controls" style="margin-bottom:1rem;background:var(--surface);padding:1rem;border-radius:10px;">
+        <div class="form-group"><label>Desde</label><input type="date" id="inf-desde"></div>
+        <div class="form-group"><label>Hasta</label><input type="date" id="inf-hasta"></div>
+        <button class="btn btn-primary" onclick="generarInforme()">Generar informe de ventas</button>
+        <button class="btn btn-secondary" onclick="generarListaPrecios()"><span style="color:var(--accent)">📄 PDF</span> Lista Precios</button>
+        <button class="btn btn-secondary" onclick="generarPDFPedidos()"><span style="color:var(--blue)">📦 PDF</span> Pedidos</button>
+      </div>
       <div class="stat-grid" id="stat-grid"></div>
       <div class="card"><div class="card-title">Detalle de ventas del período</div>
         <table><thead><tr><th>Fecha</th><th>Productos</th><th>Costo (CMV)</th><th>Venta</th><th>Margen Bruto</th></tr></thead>
@@ -370,12 +405,32 @@
       </div>
     </div>
     
-    <div id="inf-diario" class="inf-tab">
+    <div id="inf-diario" class="inf-tab" style="display:none;">
       <div class="card">
         <div class="card-title">Libro Diario General</div>
-        <div class="info-tooltip" style="margin-bottom:1rem;">Nomenclatura patrimonial: <strong>(+A/-A)</strong> Activos, <strong>(+P/-P)</strong> Pasivos, <strong>(+PN/-PN)</strong> Patrimonio Neto, <strong>(+R+/-R-)</strong> Resultados / Ingresos y Egresos. Las cuentas de los socios actúan como <strong>(-P/+A)</strong> según si la empresa les debe a ellos o ellos a la empresa.</div>
+        <div class="info-tooltip" style="margin-bottom:1rem;">Nomenclatura patrimonial: <strong>(+A/-A)</strong> Activos, <strong>(+P/-P)</strong> Pasivos, <strong>(+PN/-PN)</strong> Patrimonio Neto, <strong>(+R+/-R-)</strong> Resultados.</div>
         <table><thead><tr><th>Fecha y Ref.</th><th>Cuentas Patrimoniales</th><th style="text-align:right;">Debe</th><th style="text-align:right;">Haber</th></tr></thead>
         <tbody id="tabla-diario"></tbody></table>
+      </div>
+    </div>
+
+    <div id="inf-vencimientos" class="inf-tab" style="display:none;">
+      <div class="card">
+        <div class="card-title">Reporte de Vencimientos</div>
+        <div style="display:flex; gap:.5rem; align-items:flex-end; margin-bottom:1rem; flex-wrap:wrap;">
+           <div class="form-group">
+              <label>Mostrar productos que vencen en los próximos:</label>
+              <div style="display:flex;align-items:center;gap:.5rem;">
+                 <input type="number" id="venc-dias" value="30" step="1" min="1" style="width:80px;">
+                 <span>días.</span>
+              </div>
+           </div>
+           <button class="btn btn-primary" onclick="generarReporteVencimientos()">Generar Alerta</button>
+        </div>
+        <table>
+          <thead><tr><th>Producto</th><th>Proveedor Reciente</th><th>Lote (Fecha Venc.)</th><th>Stock del Lote</th><th>Días Restantes</th></tr></thead>
+          <tbody id="tabla-inf-vencimientos"><tr><td colspan="5" style="text-align:center;">Hacé clic en Generar Alerta para analizar el inventario.</td></tr></tbody>
+        </table>
       </div>
     </div>
   </div>

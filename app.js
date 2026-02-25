@@ -59,14 +59,17 @@ window.populateSelects = function() {
     const provs = '<option value="">— Seleccionar —</option>' + store.db.proveedores.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
     document.querySelectorAll('#np-proveedor, #ep-prod-proveedor, #deuda-prov, #comp-proveedor').forEach(s => { const val = s.value; s.innerHTML = provs; s.value = val; });
     
-    const ctas = store.db.cuentas.map(c => `<option value="${c.id}">${c.nombre} (${fmt(finanzas.calcSaldoCuenta(c.id))})</option>`).join('');
-    document.querySelectorAll('#comp-cuenta, #pd-cuenta, #gasto-cuenta, #mov-cuenta, #envios-cuenta').forEach(s => { const val = s.value; s.innerHTML = ctas; s.value = val || (store.db.cuentas[0]?.id || ''); });
+    // Filtramos las cuentas para que las eliminadas lógicamente (!c.deleted) no aparezcan más en los selectores
+    const ctasActivas = store.db.cuentas.filter(c => !c.deleted);
+    const ctas = ctasActivas.map(c => `<option value="${c.id}">${c.nombre} (${fmt(finanzas.calcSaldoCuenta(c.id))})</option>`).join('');
+    
+    document.querySelectorAll('#comp-cuenta, #pd-cuenta, #gasto-cuenta, #mov-cuenta, #envios-cuenta, #transf-origen, #transf-destino').forEach(s => { const val = s.value; s.innerHTML = ctas; s.value = val || (ctasActivas[0]?.id || ''); });
     
     const socs = '<option value="">— Seleccionar —</option>' + store.db.socios.filter(s => !s.deleted).map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
     document.querySelectorAll('#mov-socio, #rs-socio').forEach(s => { const val = s.value; s.innerHTML = socs; s.value = val; });
     
-    document.getElementById('medios-pago-btns').innerHTML = store.db.cuentas.map(c => `<button class="medio-btn${c.id === store.medioSeleccionado ? ' selected' : ''}" onclick="window.selectMedio('${c.id}',this)">${c.nombre}</button>`).join('');
-    document.getElementById('vent-filtro-medio').innerHTML = '<option value="">Todas</option>' + store.db.cuentas.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
+    document.getElementById('medios-pago-btns').innerHTML = ctasActivas.map(c => `<button class="medio-btn${c.id === store.medioSeleccionado ? ' selected' : ''}" onclick="window.selectMedio('${c.id}',this)">${c.nombre}</button>`).join('');
+    document.getElementById('vent-filtro-medio').innerHTML = '<option value="">Todas</option>' + ctasActivas.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
 };
 
 window.cargarConfig = function() {

@@ -37,7 +37,14 @@
 <section class="section active" id="sec-pos">
   <div id="alertas-venc-pos"></div>
   <div class="pos-layout">
-    <div>
+    <div style="display:flex; flex-direction:column; gap:1rem;">
+      <div class="card" style="padding-bottom: 0.5rem;">
+        <div style="font-size:.73rem;color:var(--muted);margin-bottom:.5rem;font-weight:600;text-transform:uppercase;">⭐ Combos y Promociones Activas</div>
+        <div id="pos-promos-container" style="display:flex; gap:10px; overflow-x:auto; padding-bottom:10px;">
+           <span style="font-size:.8rem;color:var(--muted);">No hay promociones activas. Creálas en el menú Ventas.</span>
+        </div>
+      </div>
+
       <div class="card">
         <div class="barcode-wrap">
           <input type="text" id="pos-barcode" placeholder="Esperando código... (o ENTER para confirmar venta)" oninput="handleBarcodeInput()" autofocus>
@@ -148,7 +155,7 @@
       <div class="form-group"><label>Descuento por pago en Efectivo (%)</label><input type="number" id="cfg-desc-efectivo" step="0.5" min="0" max="50" placeholder="10" value="10"></div>
       <button class="btn btn-primary" onclick="guardarDescEfectivo()">Guardar regla</button>
     </div>
-    <div class="info-tooltip">Se aplica en POS al elegir Efectivo. Productos con "Venta al Costo" o "−Desc%" propio en la tabla de abajo NO reciben este descuento extra.</div>
+    <div class="info-tooltip">Se aplica en POS al elegir Efectivo. Productos con "Venta al Costo", "Promociones/Combos" o "−Desc%" propio en la tabla de abajo NO reciben este descuento extra.</div>
   </div>
   
   <div class="card">
@@ -190,7 +197,7 @@
 <section class="section" id="sec-ventas">
   <div class="tabs-row">
     <button class="tab-pill active" onclick="showVentTab('list',this)">Historial de Ventas</button>
-    <button class="tab-pill" onclick="showVentTab('promo',this)">Análisis de Promociones</button>
+    <button class="tab-pill" onclick="showVentTab('promo',this)">Combos y Promociones</button>
   </div>
 
   <div id="vent-list" class="vent-tab active">
@@ -211,15 +218,24 @@
   </div>
 
   <div id="vent-promo" class="vent-tab" style="display:none;">
+    <div class="card" style="border-left: 4px solid var(--green);">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="card-title" style="margin:0; border:none;">Mis Promociones Activas</div>
+          <button class="btn btn-green" onclick="window.abrirModalNuevaPromo()">+ Crear Promo Manual</button>
+      </div>
+      <div class="info-tooltip" style="margin-top:1rem;">Las promociones creadas aquí aparecerán como botones rápidos en la Caja Registradora (POS). No reciben el descuento general en efectivo para proteger la rentabilidad.</div>
+      <div id="lista-promos-activas" style="margin-top:1.5rem; display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:1rem;"></div>
+    </div>
+
     <div class="card">
-      <div class="card-title">Promociones Sugeridas (Market Basket Analysis)</div>
-      <div class="info-tooltip">Calcula las agrupaciones de productos que se venden juntos con mayor frecuencia. Utilizá esta información para armar promociones (Ej: "Llevando X e Y, 10% de descuento").</div>
+      <div class="card-title">Sugerencias del Algoritmo (Market Basket Analysis)</div>
+      <div class="info-tooltip">Calcula agrupaciones de productos que se venden juntos con mayor frecuencia. Te sugiere un descuento inteligente garantizando que el combo siempre genere una ganancia mínima del 10% sobre los costos, y evitando que sea más barato comprarlo por separado en efectivo.</div>
       <div style="margin-top:.85rem;margin-bottom:1rem;">
-         <button class="btn btn-primary" onclick="generarAnalisisPromociones()">Ejecutar Análisis</button>
+         <button class="btn btn-primary" onclick="generarAnalisisPromociones()">Ejecutar Análisis y Mostrar Sugerencias</button>
       </div>
       <table>
-        <thead><tr><th>Combinación Sugerida</th><th>Ventas Conjuntas</th><th>Descuento Sugerido</th></tr></thead>
-        <tbody id="tabla-promociones"><tr><td colspan="3" style="text-align:center;color:var(--muted)">Ejecutá el análisis para ver el Top 10.</td></tr></tbody>
+        <thead><tr><th>Combinación Sugerida</th><th>Ventas Conjuntas</th><th>Precio Recomendado</th><th></th></tr></thead>
+        <tbody id="tabla-promociones"><tr><td colspan="4" style="text-align:center;color:var(--muted)">Ejecutá el análisis para ver el Top 10.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -490,6 +506,46 @@
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="cerrarModalQty()">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarAgregarCarrito()">Agregar ↵</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-promo">
+  <div class="modal" style="max-width: 600px;">
+    <h2>⭐ Armar Promoción / Combo</h2>
+    <div class="info-tooltip">Agregá los productos que componen el combo. El sistema calculará el costo base y te permitirá aplicar un porcentaje de descuento para definir el Precio Promo final.</div>
+    <div class="form-grid" style="margin-top:1rem;">
+      <div class="form-group"><label>Nombre de la Promoción *</label><input type="text" id="promo-nombre" placeholder="Ej: Combo Desayuno (Café + Medialunas)"></div>
+      <div class="form-group"><label>Descuento a aplicar (%) *</label><input type="number" id="promo-desc" step="1" min="0" max="100" value="15" oninput="window.calcularTotalesPromo()"></div>
+    </div>
+    
+    <div style="margin-top:1rem; padding:1rem; background:var(--surface2); border-radius:8px; border: 1px solid var(--border);">
+      <h4 style="margin-top:0; margin-bottom:.5rem;">Productos incluidos en el combo</h4>
+      <div style="display:flex; gap:5px; margin-bottom:10px;">
+        <select id="promo-add-prod" style="flex:1;"></select>
+        <input type="number" id="promo-add-qty" value="1" min="1" step="0.001" style="width:80px;" placeholder="Cant.">
+        <button class="btn btn-secondary" onclick="window.agregarProductoPromo()">Añadir</button>
+      </div>
+      <table style="margin:0; font-size:.85rem;">
+        <thead><tr><th>Producto</th><th>Cant.</th><th>Costo U.</th><th>Precio Normal</th><th></th></tr></thead>
+        <tbody id="tabla-promo-items"></tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:1.5rem; display:flex; justify-content:space-between; align-items:flex-end; border-top: 1px dashed var(--border); padding-top: 1rem;">
+        <div style="font-size:0.85rem; color:var(--muted); line-height: 1.5;">
+            Costo Neto de Mercadería: <strong id="promo-costo" class="mono">$0.00</strong><br>
+            Suma Precio Venta Individual: <strong id="promo-normal" class="mono" style="text-decoration:line-through;">$0.00</strong>
+        </div>
+        <div style="text-align: right;">
+            <div style="font-size:0.75rem; font-weight:bold; color:var(--accent); text-transform:uppercase; margin-bottom:3px;">Precio del Combo final al cliente</div>
+            <div id="promo-final" class="mono" style="font-size:1.8rem; font-weight:900; color:var(--green); line-height:1;">$0.00</div>
+        </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:1.5rem;">
+      <button class="btn btn-secondary" onclick="document.getElementById('modal-promo').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="window.guardarPromoManual()">Guardar Promoción</button>
     </div>
   </div>
 </div>

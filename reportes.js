@@ -109,14 +109,7 @@ const reportes = {
                 const prov = store.db.proveedores.find(x => x.id === l.proveedorId)?.nombre || 'Sin Proveedor';
                 const diffTime = Math.ceil((new Date(l.vencimiento) - new Date(hoyStr)) / (1000 * 60 * 60 * 24));
                 
-                resultados.push({
-                    producto: p.nombre,
-                    proveedor: prov,
-                    vencimiento: l.vencimiento,
-                    stock: l.cantDisponible,
-                    unidad: p.unidad,
-                    diasRestantes: diffTime
-                });
+                resultados.push({ producto: p.nombre, proveedor: prov, vencimiento: l.vencimiento, stock: l.cantDisponible, unidad: p.unidad, diasRestantes: diffTime });
             }
         });
         return resultados.sort((a, b) => a.vencimiento.localeCompare(b.vencimiento));
@@ -124,16 +117,15 @@ const reportes = {
 
     generarAnalisisPromociones: function(topK = 10) {
         const transacciones = store.db.ventas.map(v => 
-            store.db.ventaItems.filter(vi => vi.ventaId === v.id).map(vi => vi.productoId)
-        ).filter(t => t.length > 1); // Solo ventas múltiples
+            store.db.ventaItems.filter(vi => vi.ventaId === v.id && !vi.isPromo).map(vi => vi.productoId)
+        ).filter(t => t.length > 1);
 
-        const frecuencias = {};
-        const itemNames = {};
-        const itemPrices = {};
+        const frecuencias = {}; const itemNames = {}; const itemPrices = {}; const itemCosts = {};
 
         store.db.productos.filter(p => !p.deleted).forEach(p => {
             itemNames[p.id] = p.nombre;
             itemPrices[p.id] = inventario.calcPrecioFinal(p.id);
+            itemCosts[p.id] = inventario.getCostoMasAlto(p.id);
         });
 
         transacciones.forEach(t => {
@@ -143,7 +135,6 @@ const reportes = {
                     const key2 = `${itemsUnicos[i]}|${itemsUnicos[j]}`;
                     frecuencias[key2] = (frecuencias[key2] || 0) + 1;
                     
-                    // Combinaciones de 3 productos
                     for (let k = j + 1; k < itemsUnicos.length; k++) {
                          const key3 = `${itemsUnicos[i]}|${itemsUnicos[j]}|${itemsUnicos[k]}`;
                          frecuencias[key3] = (frecuencias[key3] || 0) + 1;
@@ -152,14 +143,32 @@ const reportes = {
             }
         });
 
+        const descEfectivoGlobal = parseFloat(store.db.config?.descEfectivo) || 0;
+
         const combinaciones = Object.keys(frecuencias)
             .map(k => {
                 const ids = k.split('|');
-                if (ids.some(id => !itemNames[id])) return null; // Ignorar si hay productos borrados
-                const nombres = ids.map(id => itemNames[id]).join(' + ');
+                if (ids.some(id => !itemNames[id])) return null; 
+                
+                const nombres = ids.map(id => itemNames[id]);
                 const precioNormal = ids.reduce((sum, id) => sum + (itemPrices[id] || 0), 0);
-                const descSugerido = precioNormal * 0.15; // Sugerencia fija del 15%
-                return { nombres, frecuencia: frecuencias[k], precioNormal, precioPromo: precioNormal - descSugerido, descSugerido };
+                const costoTotal = ids.reduce((sum, id) => sum + (itemCosts[id] || 0), 0);
+
+                const precioEfectivo = precioNormal * (1 - descEfectivoGlobal / 100);
+                
+                // Sugerimos un 5% extra sobre el descuento en efectivo
+                let precioPromo = precioNormal * (1 - (descEfectivoGlobal + 5) / 100);
+                
+                // Piso estricto: Ganancia mínima del 10% sobre el costo
+                const precioMinimoCosto = costoTotal * 1.10;
+                if (precioPromo < precioMinimoCosto) precioPromo = precioMinimoCosto;
+
+                // Si por el costo la promo queda más cara que comprar separado en efectivo, la descartamos
+                if (precioPromo >= precioEfectivo && descEfectivoGlobal > 0) return null;
+
+                const porcentajeSug = ((1 - (precioPromo / precioNormal)) * 100).toFixed(1);
+
+                return { ids, nombres, frecuencia: frecuencias[k], precioNormal, costoTotal, precioPromo, porcentaje: porcentajeSug };
             })
             .filter(c => c && c.frecuencia > 1)
             .sort((a, b) => b.frecuencia - a.frecuencia)
@@ -168,11 +177,10 @@ const reportes = {
         return combinaciones;
     },
 
-    // ... (Mantengo las funciones de PDF intactas abajo) ...
+    // PDF Functions
     generarPDFPedidos: function() {
         if (!window.jspdf) throw new Error('Biblioteca jsPDF no cargada');
         const { jsPDF } = window.jspdf; const doc = new jsPDF(); const cfg = store.db.config; let y = 15;
-        
         if (cfg.logo) { try { const imgProps = doc.getImageProperties(cfg.logo); const ratio = imgProps.width / imgProps.height; const w = 22 * ratio; doc.addImage(cfg.logo, 'PNG', 10, y - 5, w, 22); y += 20; } catch (e) {} }
         doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('Pedidos Sugeridos (Reposición)', cfg.logo ? 35 : 105, y, { align: cfg.logo ? 'left' : 'center' }); y += 8;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text('Fecha: ' + new Date().toLocaleDateString('es-AR'), cfg.logo ? 35 : 105, y, { align: cfg.logo ? 'left' : 'center' }); y += 10;
@@ -216,38 +224,21 @@ const reportes = {
 
     generarPDFEtiquetas: function(productosObjArr) {
         if (!window.jspdf || !window.JsBarcode) throw new Error('Bibliotecas jsPDF o JsBarcode no cargadas');
-        const { jsPDF } = window.jspdf; 
-        const doc = new jsPDF();
-        let x = 10, y = 15;
-        const width = 60, height = 35;
-
+        const { jsPDF } = window.jspdf; const doc = new jsPDF(); let x = 10, y = 15; const width = 60, height = 35;
         doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text('Etiquetas / Precios Actualizados', 105, 10, { align: 'center' });
-        
         productosObjArr.forEach((p) => {
-            const prod = store.db.productos.find(x => x.id === p.id);
-            const codigo = prod.codigo || prod.barcode;
-
+            const prod = store.db.productos.find(x => x.id === p.id); const codigo = prod.codigo || prod.barcode;
             if (x + width > 200) { x = 10; y += height + 5; }
             if (y + height > 280) { doc.addPage(); x = 10; y = 15; }
-
             doc.setDrawColor(150); doc.rect(x, y, width, height);
-            doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-            doc.text(p.nombre.substring(0, 30), x + 2, y + 6);
-            doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-            doc.text(fmt(p.calculado), x + width - 2, y + 13, { align: 'right' });
-
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.text(p.nombre.substring(0, 30), x + 2, y + 6);
+            doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.text(fmt(p.calculado), x + width - 2, y + 13, { align: 'right' });
             if (codigo) {
                 try {
-                    const canvas = document.createElement('canvas');
-                    window.JsBarcode(canvas, codigo, { format: "CODE128", width: 2, height: 45, displayValue: true, fontSize: 14, margin: 0 });
-                    const imgData = canvas.toDataURL("image/png");
-                    const imgP = doc.getImageProperties(imgData);
-                    const maxW = 50; const maxH = 17;
-                    const ratio = Math.min(maxW / imgP.width, maxH / imgP.height);
-                    const finalW = imgP.width * ratio;
-                    const finalH = imgP.height * ratio;
-                    const centerX = x + 5 + (maxW - finalW) / 2;
-                    doc.addImage(imgData, 'PNG', centerX, y + 15, finalW, finalH);
+                    const canvas = document.createElement('canvas'); window.JsBarcode(canvas, codigo, { format: "CODE128", width: 2, height: 45, displayValue: true, fontSize: 14, margin: 0 });
+                    const imgData = canvas.toDataURL("image/png"); const imgP = doc.getImageProperties(imgData); const maxW = 50; const maxH = 17;
+                    const ratio = Math.min(maxW / imgP.width, maxH / imgP.height); const finalW = imgP.width * ratio; const finalH = imgP.height * ratio;
+                    const centerX = x + 5 + (maxW - finalW) / 2; doc.addImage(imgData, 'PNG', centerX, y + 15, finalW, finalH);
                 } catch(e) {}
             }
             x += width + 5;
@@ -257,37 +248,20 @@ const reportes = {
 
     generarPDFCodigosBarra: function(productos) {
         if (!window.jspdf || !window.JsBarcode) throw new Error('Bibliotecas jsPDF o JsBarcode no cargadas');
-        const { jsPDF } = window.jspdf; 
-        const doc = new jsPDF();
-        let x = 10, y = 15;
-        const width = 60, height = 35;
-
+        const { jsPDF } = window.jspdf; const doc = new jsPDF(); let x = 10, y = 15; const width = 60, height = 35;
         doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text('Catálogo - Códigos de Barras', 105, 10, { align: 'center' });
-        
         productos.forEach((p) => {
-            const codigo = p.codigo || p.barcode;
-            if (!codigo) return;
-
+            const codigo = p.codigo || p.barcode; if (!codigo) return;
             if (x + width > 200) { x = 10; y += height + 5; }
             if (y + height > 280) { doc.addPage(); x = 10; y = 15; }
-
             doc.setDrawColor(150); doc.rect(x, y, width, height);
-            doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-            doc.text(p.nombre.substring(0, 30), x + 2, y + 6);
-
+            doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.text(p.nombre.substring(0, 30), x + 2, y + 6);
             try {
-                const canvas = document.createElement('canvas');
-                window.JsBarcode(canvas, codigo, { format: "CODE128", width: 2, height: 45, displayValue: true, fontSize: 14, margin: 0 });
-                const imgData = canvas.toDataURL("image/png");
-                const imgP = doc.getImageProperties(imgData);
-                const maxW = 50; const maxH = 22;
-                const ratio = Math.min(maxW / imgP.width, maxH / imgP.height);
-                const finalW = imgP.width * ratio;
-                const finalH = imgP.height * ratio;
-                const centerX = x + 5 + (maxW - finalW) / 2;
-                doc.addImage(imgData, 'PNG', centerX, y + 9, finalW, finalH);
+                const canvas = document.createElement('canvas'); window.JsBarcode(canvas, codigo, { format: "CODE128", width: 2, height: 45, displayValue: true, fontSize: 14, margin: 0 });
+                const imgData = canvas.toDataURL("image/png"); const imgP = doc.getImageProperties(imgData); const maxW = 50; const maxH = 22;
+                const ratio = Math.min(maxW / imgP.width, maxH / imgP.height); const finalW = imgP.width * ratio; const finalH = imgP.height * ratio;
+                const centerX = x + 5 + (maxW - finalW) / 2; doc.addImage(imgData, 'PNG', centerX, y + 9, finalW, finalH);
             } catch(e) {}
-            
             x += width + 5;
         });
         doc.save('codigos-barras-' + today() + '.pdf');

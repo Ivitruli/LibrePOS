@@ -13,6 +13,7 @@ const DIAS_SEMANA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes',
 const today = () => new Date().toISOString().slice(0, 10);
 
 let chartCashflow = null;
+let promoItems = []; // Array temporal para armar el combo en el modal
 
 // ================= VENTAS Y ANÁLISIS =================
 window.showVentTab = function(id, btn) {
@@ -20,10 +21,11 @@ window.showVentTab = function(id, btn) {
     document.querySelectorAll('#sec-ventas .tab-pill').forEach(b => b.classList.remove('active'));
     document.getElementById('vent-' + id).style.display = 'block';
     btn.classList.add('active');
+    if(id === 'promo') window.renderPromosActivas();
 };
 
 window.renderTablaVentas = function() {
-    document.getElementById('tabla-ventas-menu').innerHTML = [...store.db.ventas].reverse().map(v => `<tr><td class="mono">${new Date(v.timestamp).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</td><td style="font-size:.78rem;">${store.db.ventaItems.filter(i => i.ventaId === v.id).map(i => i.nombre).join(', ')}</td><td class="mono">${fmt(v.totalVenta + v.costoEnvio)}</td><td class="mono">${v.descEfectivo > 0 ? fmt(v.descEfectivo) : '—'}</td><td><span class="badge badge-ink">${v.medioPago}</span></td><td><input type="checkbox" ${v.facturada ? 'checked' : ''} onchange="store.db.ventas.find(x=>x.id==='${v.id}').facturada=this.checked;store.saveDB();"></td></tr>`).join('');
+    document.getElementById('tabla-ventas-menu').innerHTML = [...store.db.ventas].reverse().map(v => `<tr><td class="mono">${new Date(v.timestamp).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</td><td style="font-size:.78rem;">${store.db.ventaItems.filter(i => i.ventaId === v.id).map(i => (i.isPromo ? '⭐ ' : '') + i.nombre).join(', ')}</td><td class="mono">${fmt(v.totalVenta + v.costoEnvio)}</td><td class="mono">${v.descEfectivo > 0 ? fmt(v.descEfectivo) : '—'}</td><td><span class="badge badge-ink">${v.medioPago}</span></td><td><input type="checkbox" ${v.facturada ? 'checked' : ''} onchange="store.db.ventas.find(x=>x.id==='${v.id}').facturada=this.checked;store.saveDB();"></td></tr>`).join('');
 };
 
 window.generarAnalisisPromociones = function() {
@@ -31,17 +33,117 @@ window.generarAnalisisPromociones = function() {
         const promos = reportes.generarAnalisisPromociones(10);
         const tbody = document.getElementById('tabla-promociones');
         if (!promos.length) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No hay suficientes datos de ventas conjuntas para generar sugerencias.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay suficientes datos de ventas conjuntas para generar sugerencias.</td></tr>';
             return;
         }
         tbody.innerHTML = promos.map(p => `<tr>
-            <td><strong>${p.nombres}</strong><br><span style="font-size:0.75rem;color:var(--muted)">Precio individual sumado: ${fmt(p.precioNormal)}</span></td>
+            <td><strong>${p.nombres.join(' + ')}</strong><br><span style="font-size:0.75rem;color:var(--muted)">Precio individual sumado: ${fmt(p.precioNormal)}</span></td>
             <td class="mono">${p.frecuencia} veces</td>
-            <td><span style="color:var(--green);font-weight:bold;">Sugerido: ${fmt(p.precioPromo)}</span><br><span style="font-size:0.75rem;color:var(--accent)">(-${fmt(p.descSugerido)})</span></td>
+            <td><span style="color:var(--green);font-weight:bold;">Sugerido: ${fmt(p.precioPromo)}</span><br><span style="font-size:0.75rem;color:var(--accent)">(-${p.porcentaje}%)</span></td>
+            <td><button class="btn btn-sm btn-primary" onclick='window.abrirModalNuevaPromo(${JSON.stringify("Promo: " + p.nombres.join(" + "))}, ${JSON.stringify(p.ids)}, ${p.porcentaje})'>Crear Promo</button></td>
         </tr>`).join('');
     } catch (e) {
         window.showToast(e.message, 'error');
     }
+};
+
+// ================= GESTIÓN DE PROMOCIONES (COMBOS) =================
+window.abrirModalNuevaPromo = function(nombre = '', ids = [], desc = 15) {
+    if (!store.db.promociones) store.db.promociones = [];
+    promoItems = [];
+    document.getElementById('promo-nombre').value = nombre || '';
+    document.getElementById('promo-desc').value = desc || 15;
+    
+    document.getElementById('promo-add-prod').innerHTML = '<option value="">— Producto —</option>' + store.db.productos.filter(p => !p.deleted).map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+    
+    if (ids && ids.length) {
+        ids.forEach(id => {
+            const prod = store.db.productos.find(p => p.id === id);
+            if (prod) {
+                promoItems.push({ id: prod.id, nombre: prod.nombre, cantidad: 1, costoU: inventario.getCostoMasAlto(prod.id), precioU: inventario.calcPrecioFinal(prod.id), unidad: prod.unidad });
+            }
+        });
+    }
+    window.calcularTotalesPromo();
+    document.getElementById('modal-promo').classList.add('open');
+};
+
+window.agregarProductoPromo = function() {
+    const pId = document.getElementById('promo-add-prod').value;
+    const qty = parseFloat(document.getElementById('promo-add-qty').value);
+    if(!pId || !qty || qty <= 0) return;
+    const prod = store.db.productos.find(p => p.id === pId);
+    
+    const exist = promoItems.find(i => i.id === pId);
+    if(exist) exist.cantidad += qty;
+    else promoItems.push({ id: prod.id, nombre: prod.nombre, cantidad: qty, costoU: inventario.getCostoMasAlto(prod.id), precioU: inventario.calcPrecioFinal(prod.id), unidad: prod.unidad });
+    
+    document.getElementById('promo-add-qty').value = 1;
+    window.calcularTotalesPromo();
+};
+
+window.quitarProductoPromo = function(idx) {
+    promoItems.splice(idx, 1);
+    window.calcularTotalesPromo();
+};
+
+window.calcularTotalesPromo = function() {
+    const tbody = document.getElementById('tabla-promo-items');
+    tbody.innerHTML = promoItems.map((i, idx) => `<tr><td>${i.nombre}</td><td class="mono">${i.cantidad}</td><td class="mono">${fmt(i.costoU)}</td><td class="mono">${fmt(i.precioU * i.cantidad)}</td><td><button class="btn btn-sm btn-danger" onclick="window.quitarProductoPromo(${idx})">✕</button></td></tr>`).join('');
+    
+    const costoTotal = promoItems.reduce((s, i) => s + (i.costoU * i.cantidad), 0);
+    const precioNormal = promoItems.reduce((s, i) => s + (i.precioU * i.cantidad), 0);
+    const desc = parseFloat(document.getElementById('promo-desc').value) || 0;
+    
+    let precioPromo = precioNormal * (1 - desc/100);
+    if (precioPromo < costoTotal * 1.1) precioPromo = costoTotal * 1.1; // Protección: Mínimo 10% de ganancia
+
+    document.getElementById('promo-costo').textContent = fmt(costoTotal);
+    document.getElementById('promo-normal').textContent = fmt(precioNormal);
+    document.getElementById('promo-final').textContent = fmt(precioPromo);
+};
+
+window.guardarPromoManual = function() {
+    const nombre = document.getElementById('promo-nombre').value.trim();
+    if(!nombre || promoItems.length < 1) return window.showToast('Faltan datos o productos para el combo', 'error');
+    
+    const costoTotal = promoItems.reduce((s, i) => s + (i.costoU * i.cantidad), 0);
+    const precioNormal = promoItems.reduce((s, i) => s + (i.precioU * i.cantidad), 0);
+    const desc = parseFloat(document.getElementById('promo-desc').value) || 0;
+    let precioPromo = precioNormal * (1 - desc/100);
+    if (precioPromo < costoTotal * 1.1) precioPromo = costoTotal * 1.1;
+
+    if (!store.db.promociones) store.db.promociones = [];
+    store.db.promociones.push({ id: Date.now().toString(), nombre, items: promoItems, precioPromo, activa: true });
+    
+    store.saveDB();
+    document.getElementById('modal-promo').classList.remove('open');
+    window.renderPromosActivas();
+    if(typeof window.renderPromosActivasPOS === 'function') window.renderPromosActivasPOS();
+    window.showToast('Promoción guardada y activa en el POS');
+};
+
+window.renderPromosActivas = function() {
+    if (!store.db.promociones) store.db.promociones = [];
+    const c = document.getElementById('lista-promos-activas');
+    if(!c) return;
+    if(store.db.promociones.length === 0) {
+        c.innerHTML = '<div style="color:var(--muted);font-size:.85rem;">No hay promociones creadas.</div>'; return;
+    }
+    c.innerHTML = store.db.promociones.map(p => `
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1rem; display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+                <div style="font-weight:bold; font-size:1.1rem; color:var(--green);">⭐ ${p.nombre}</div>
+                <div style="font-size:0.8rem; color:var(--muted); margin-top:5px; padding-left:10px; border-left:2px solid var(--border);">
+                    ${p.items.map(i => `${i.cantidad}x ${i.nombre}`).join('<br>')}
+                </div>
+            </div>
+            <div style="margin-top:1rem; display:flex; justify-content:space-between; align-items:flex-end; border-top:1px dashed var(--border); padding-top:.5rem;">
+                <div class="mono" style="font-size:1.4rem; font-weight:bold;">${fmt(p.precioPromo)}</div>
+                <button class="btn btn-sm btn-danger" onclick="if(confirm('¿Eliminar promoción?')){ store.db.promociones = store.db.promociones.filter(x=>x.id!=='${p.id}'); store.saveDB(); window.renderPromosActivas(); if(typeof window.renderPromosActivasPOS === 'function') window.renderPromosActivasPOS(); }">✕ Borrar</button>
+            </div>
+        </div>
+    `).join('');
 };
 
 // ================= PROVEEDORES Y DEUDAS =================
@@ -84,46 +186,11 @@ window.renderTablaGastos = function() {
 // ================= FINANZAS Y CAJA =================
 window.crearCuenta = function() { try { finanzas.crearCuenta(document.getElementById('nueva-cta-nombre').value, document.getElementById('nueva-cta-saldo').value); store.saveDB(); window.renderCuentas(); if(typeof window.populateSelects === 'function') window.populateSelects(); } catch(e) { window.showToast(e.message, 'error'); } };
 window.ajustarCaja = function(cId, inp) { const aj = finanzas.ajustarCaja(cId, inp.value, today()); if(aj) { store.saveDB(); window.renderCuentas(); window.renderFinanzasTotales(); window.showToast('Ajuste guardado'); } };
-window.eliminarCuenta = function(cId) {
-    try {
-        if(confirm('¿Estás seguro de querer ocultar y borrar esta cuenta? (Solo será posible si su saldo es exactamente $0)')) {
-            finanzas.eliminarCuenta(cId);
-            store.saveDB();
-            window.renderCuentas();
-            if(typeof window.populateSelects === 'function') window.populateSelects();
-            window.showToast('Cuenta eliminada y ocultada correctamente');
-        }
-    } catch(e) { window.showToast(e.message, 'error'); }
-};
-
-window.renderCuentas = function() { 
-    document.getElementById('lista-cuentas').innerHTML = store.db.cuentas.filter(c => !c.deleted).map(c => `
-    <div class="account-card">
-        <div style="display:flex;justify-content:space-between;">
-            <div class="account-name">${c.nombre}</div>
-            <button class="btn btn-danger btn-sm" onclick="window.eliminarCuenta('${c.id}')" title="Borrar cuenta" style="padding: 2px 6px;">✕</button>
-        </div>
-        <div class="account-bal">${fmt(finanzas.calcSaldoCuenta(c.id))}</div>
-        <div style="display:flex;gap:.3rem;margin-top:.5rem;">
-            <input type="number" placeholder="Saldo Real" id="real-${c.id}" style="padding:.3rem;font-size:.8rem;">
-            <button class="btn btn-secondary btn-sm" onclick="window.ajustarCaja('${c.id}', document.getElementById('real-${c.id}'))">Ajustar</button>
-        </div>
-    </div>`).join(''); 
-};
+window.eliminarCuenta = function(cId) { try { if(confirm('¿Estás seguro de querer ocultar y borrar esta cuenta? (Solo será posible si su saldo es exactamente $0)')) { finanzas.eliminarCuenta(cId); store.saveDB(); window.renderCuentas(); if(typeof window.populateSelects === 'function') window.populateSelects(); window.showToast('Cuenta eliminada y ocultada correctamente'); } } catch(e) { window.showToast(e.message, 'error'); } };
+window.renderCuentas = function() { document.getElementById('lista-cuentas').innerHTML = store.db.cuentas.filter(c => !c.deleted).map(c => `<div class="account-card"><div style="display:flex;justify-content:space-between;"><div class="account-name">${c.nombre}</div><button class="btn btn-danger btn-sm" onclick="window.eliminarCuenta('${c.id}')" title="Borrar cuenta" style="padding: 2px 6px;">✕</button></div><div class="account-bal">${fmt(finanzas.calcSaldoCuenta(c.id))}</div><div style="display:flex;gap:.3rem;margin-top:.5rem;"><input type="number" placeholder="Saldo Real" id="real-${c.id}" style="padding:.3rem;font-size:.8rem;"><button class="btn btn-secondary btn-sm" onclick="window.ajustarCaja('${c.id}', document.getElementById('real-${c.id}'))">Ajustar</button></div></div>`).join(''); };
 
 window.registrarTransferencia = function() {
-    try {
-        const origen = document.getElementById('transf-origen').value;
-        const destino = document.getElementById('transf-destino').value;
-        const monto = document.getElementById('transf-monto').value;
-        const fecha = document.getElementById('transf-fecha').value;
-        finanzas.registrarTransferencia(origen, destino, monto, fecha);
-        store.saveDB();
-        window.renderCuentas();
-        window.renderFinanzasTotales();
-        window.showToast('Transferencia registrada exitosamente');
-        document.getElementById('transf-monto').value = '';
-    } catch(e) { window.showToast(e.message, 'error'); }
+    try { const origen = document.getElementById('transf-origen').value; const destino = document.getElementById('transf-destino').value; const monto = document.getElementById('transf-monto').value; const fecha = document.getElementById('transf-fecha').value; finanzas.registrarTransferencia(origen, destino, monto, fecha); store.saveDB(); window.renderCuentas(); window.renderFinanzasTotales(); window.showToast('Transferencia registrada exitosamente'); document.getElementById('transf-monto').value = ''; } catch(e) { window.showToast(e.message, 'error'); }
 };
 
 window.renderFinanzasTotales = function() { document.getElementById('fin-capital').textContent = fmt(finanzas.getPatrimonioNeto() - finanzas.calcGananciaNetaGlobal()); document.getElementById('fin-ganancia').textContent = fmt(finanzas.calcGananciaSinAsignar()); document.getElementById('fin-liquidez').textContent = fmt(store.db.cuentas.reduce((s, c) => s + finanzas.calcSaldoCuenta(c.id), 0)); };
@@ -159,7 +226,7 @@ window.renderIndicadores = function() {
 window.generarInforme = function() {
     const { vts, vIng, vCosto } = reportes.getDatosInformeVentas(document.getElementById('inf-desde').value, document.getElementById('inf-hasta').value);
     document.getElementById('stat-grid').innerHTML = `<div class="stat-card"><div class="stat-label">Ventas Periodo</div><div class="stat-value">${fmt(vIng)}</div></div><div class="stat-card"><div class="stat-label">Costo (CMV)</div><div class="stat-value">${fmt(vCosto)}</div></div><div class="stat-card"><div class="stat-label">Margen Bruto</div><div class="stat-value">${fmt(vIng - vCosto)}</div></div>`;
-    document.getElementById('tabla-inf-ventas').innerHTML = vts.map(v => `<tr><td class="mono">${fmtFecha(v.fecha)}</td><td>${store.db.ventaItems.filter(i => i.ventaId === v.id).map(i => i.nombre).join(', ')}</td><td class="mono">${fmt(v.totalCosto)}</td><td class="mono">${fmt(v.totalVenta)}</td><td class="mono">${fmt(v.totalVenta - v.totalCosto)}</td></tr>`).join('');
+    document.getElementById('tabla-inf-ventas').innerHTML = vts.map(v => `<tr><td class="mono">${fmtFecha(v.fecha)}</td><td>${store.db.ventaItems.filter(i => i.ventaId === v.id).map(i => (i.isPromo ? '⭐ ' : '') + i.nombre).join(', ')}</td><td class="mono">${fmt(v.totalCosto)}</td><td class="mono">${fmt(v.totalVenta)}</td><td class="mono">${fmt(v.totalVenta - v.totalCosto)}</td></tr>`).join('');
     
     const asientos = reportes.generarAsientosDiario(document.getElementById('inf-desde').value, document.getElementById('inf-hasta').value);
     let htmlDiario = ''; let tDebe = 0; let tHaber = 0;
@@ -174,20 +241,8 @@ window.generarReporteVencimientos = function() {
     const resultados = reportes.getProximosVencimientos(dias);
     const tbody = document.getElementById('tabla-inf-vencimientos');
     
-    if (!resultados.length) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--green);font-weight:bold;">No hay productos que venzan en los próximos ${dias} días.</td></tr>`;
-        return;
-    }
-
-    tbody.innerHTML = resultados.map(r => `
-        <tr>
-            <td><strong>${r.producto}</strong></td>
-            <td>${r.proveedor}</td>
-            <td class="mono">${fmtFecha(r.vencimiento)}</td>
-            <td class="mono">${fmtQty(r.stock, r.unidad)}</td>
-            <td><span class="badge ${r.diasRestantes <= 7 ? 'badge-red' : 'badge-amber'}">${r.diasRestantes} días</span></td>
-        </tr>
-    `).join('');
+    if (!resultados.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--green);font-weight:bold;">No hay productos que venzan en los próximos ${dias} días.</td></tr>`; return; }
+    tbody.innerHTML = resultados.map(r => `<tr><td><strong>${r.producto}</strong></td><td>${r.proveedor}</td><td class="mono">${fmtFecha(r.vencimiento)}</td><td class="mono">${fmtQty(r.stock, r.unidad)}</td><td><span class="badge ${r.diasRestantes <= 7 ? 'badge-red' : 'badge-amber'}">${r.diasRestantes} días</span></td></tr>`).join('');
 };
 
 window.generarPDFPedidos = function() { reportes.generarPDFPedidos(); };

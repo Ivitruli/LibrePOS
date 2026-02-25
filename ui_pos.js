@@ -5,7 +5,7 @@ const finanzas = require('./finanzas.js');
 
 // Utilidades locales de formato
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtQty = (n, u) => u === 'kg' ? Number(n).toFixed(3) + ' kg' : u === '100g' ? Number(n).toFixed(1) + '×100g' : Number(n).toFixed(0) + ' u.';
+const fmtQty = (n, u) => u === 'kg' ? Number(n).toFixed(3) + ' kg' : u === '100g' ? Number(n).toFixed(1) + '×100g' : u === 'combo' ? Number(n).toFixed(0) + ' promo' : Number(n).toFixed(0) + ' u.';
 
 let barcodeTimer = null;
 
@@ -41,7 +41,7 @@ window.selectMedio = function(id, btn) {
 
 window.toggleCartCosto = function() {
     const isCostoChecked = document.getElementById('cart-venta-costo')?.checked;
-    store.carrito.forEach(i => i.precioVenta = inventario.getPrecioCart(i.productoId, isCostoChecked));
+    store.carrito.forEach(i => { if(!i.isPromo) i.precioVenta = inventario.getPrecioCart(i.productoId, isCostoChecked); });
     window.renderCarrito();
 };
 
@@ -69,15 +69,31 @@ window.confirmarAgregarCarrito = function() {
     if (!qty || qty <= 0) return;
     const prod = store.db.productos.find(p => p.id === store.selectedProductId);
     if (qty > inventario.getStock(prod.id) + 0.001) return window.showToast('Stock insuficiente', 'error');
-    const ex = store.carrito.find(c => c.productoId === prod.id);
+    const ex = store.carrito.find(c => c.productoId === prod.id && !c.isPromo);
     const isCostoChecked = document.getElementById('cart-venta-costo')?.checked;
     
     if (ex) ex.cantidad += qty; 
-    else store.carrito.push({ productoId: prod.id, nombre: prod.nombre, unidad: prod.unidad, cantidad: qty, precioVenta: inventario.getPrecioCart(prod.id, isCostoChecked) }); 
+    else store.carrito.push({ productoId: prod.id, nombre: prod.nombre, unidad: prod.unidad, cantidad: qty, precioVenta: inventario.getPrecioCart(prod.id, isCostoChecked), isPromo: false }); 
     
     window.cerrarModalQty();
     window.renderCarrito();
     document.getElementById('pos-barcode').focus();
+};
+
+window.agregarPromoCarrito = function(promoId) {
+    const promo = (store.db.promociones || []).find(p => p.id === promoId);
+    if (!promo) return;
+    
+    for (const sub of promo.items) {
+        if (inventario.getStock(sub.id) < sub.cantidad) return window.showToast(`Stock insuficiente de ${sub.nombre} para armar la promo`, 'error');
+    }
+    
+    const ex = store.carrito.find(c => c.productoId === promo.id && c.isPromo);
+    if (ex) ex.cantidad += 1;
+    else store.carrito.push({ productoId: promo.id, nombre: "⭐ " + promo.nombre, unidad: 'combo', cantidad: 1, precioVenta: promo.precioPromo, isPromo: true, items: promo.items });
+    
+    window.renderCarrito();
+    window.showToast('Promo agregada al carrito');
 };
 
 window.confirmarVenta = function() {
@@ -92,12 +108,30 @@ window.confirmarVenta = function() {
     let totV = 0, totC = 0, items = [];
     
     try {
-        for (const i of store.carrito) if (i.cantidad > inventario.getStock(i.productoId) + 0.001) throw new Error('Stock falto: ' + i.nombre);
         for (const i of store.carrito) {
-            const { costoTotal } = inventario.consumirPEPS(i.productoId, i.cantidad);
-            const sub = i.cantidad * i.precioVenta; totV += sub; totC += costoTotal;
-            store.db.ventaItems.push({ ventaId: vId, productoId: i.productoId, nombre: i.nombre, unidad: i.unidad, cantidad: i.cantidad, precioVenta: i.precioVenta, costoTotal });
-            items.push({ nombre: i.nombre, q: i.cantidad, u: i.unidad, s: sub });
+            if (i.isPromo) {
+                for (const sub of i.items) if (inventario.getStock(sub.id) < (sub.cantidad * i.cantidad) - 0.001) throw new Error(`Stock insuficiente para armar promo: ${sub.nombre}`);
+            } else {
+                if (i.cantidad > inventario.getStock(i.productoId) + 0.001) throw new Error('Stock falto: ' + i.nombre);
+            }
+        }
+
+        for (const i of store.carrito) {
+            if (i.isPromo) {
+                let costoTotalPromo = 0;
+                for (const sub of i.items) {
+                    const { costoTotal } = inventario.consumirPEPS(sub.id, sub.cantidad * i.cantidad);
+                    costoTotalPromo += costoTotal;
+                }
+                const sub = i.cantidad * i.precioVenta; totV += sub; totC += costoTotalPromo;
+                store.db.ventaItems.push({ ventaId: vId, productoId: i.productoId, nombre: i.nombre, unidad: 'combo', cantidad: i.cantidad, precioVenta: i.precioVenta, costoTotal: costoTotalPromo, isPromo: true, items: i.items });
+                items.push({ nombre: i.nombre, q: i.cantidad, u: 'combo', s: sub });
+            } else {
+                const { costoTotal } = inventario.consumirPEPS(i.productoId, i.cantidad);
+                const sub = i.cantidad * i.precioVenta; totV += sub; totC += costoTotal;
+                store.db.ventaItems.push({ ventaId: vId, productoId: i.productoId, nombre: i.nombre, unidad: i.unidad, cantidad: i.cantidad, precioVenta: i.precioVenta, costoTotal, isPromo: false });
+                items.push({ nombre: i.nombre, q: i.cantidad, u: i.unidad, s: sub });
+            }
         }
         
         const c = store.db.cuentas.find(x => x.id === store.medioSeleccionado);
@@ -125,7 +159,7 @@ window.cerrarModalVenta = function() {
 
 window.cambiarQtyCarrito = function(i, d) {
     const item = store.carrito[i];
-    const s = item.unidad === 'unidad' ? 1 : .1;
+    const s = (item.unidad === 'unidad' || item.unidad === 'combo') ? 1 : .1;
     item.cantidad = Math.max(s, item.cantidad + d * s);
     window.renderCarrito();
 };
@@ -157,7 +191,7 @@ window.uiActualizarTotalPOS = function() {
     
     if (calculo.descEfectivo > 0) {
         document.getElementById('cart-desc-row').style.display = 'block';
-        document.getElementById('cart-desc-row').textContent = `💵 Descuento: −${fmt(calculo.descEfectivo)}`;
+        document.getElementById('cart-desc-row').textContent = `💵 Descuento (Excl. Promos): −${fmt(calculo.descEfectivo)}`;
         document.getElementById('cart-total-sin-desc-row').style.display = 'flex';
         document.getElementById('cart-total-sin-desc').textContent = fmt(calculo.subtotal);
     } else {
@@ -180,7 +214,7 @@ window.renderCarrito = function() {
         document.getElementById('cart-total').textContent = '$0';
         return;
     }
-    c.innerHTML = store.carrito.map((i, idx) => `<div class="cart-item"><div><div class="cart-item-name">${i.nombre}</div><div style="font-size:.69rem;color:var(--muted);">${fmt(i.precioVenta)} × ${fmtQty(i.cantidad, i.unidad)}</div></div><div style="text-align:right;"><div class="cart-item-qty"><button class="qty-btn" onclick="cambiarQtyCarrito(${idx},-1)">−</button><input type="number" class="mono" value="${i.cantidad}" onchange="setQtyCarrito(${idx},this.value)" style="width:50px;text-align:center;padding:.2rem;margin:0 .2rem;"><button class="qty-btn" onclick="cambiarQtyCarrito(${idx},1)">+</button></div><div class="mono" style="font-size:.75rem;margin-top:.18rem;">${fmt(i.cantidad * i.precioVenta)}</div><button onclick="quitarDeCarrito(${idx})" style="font-size:.68rem;color:var(--accent);background:none;border:none;cursor:pointer;margin-top:2px;">✕</button></div></div>`).join('');
+    c.innerHTML = store.carrito.map((i, idx) => `<div class="cart-item"><div><div class="cart-item-name">${i.nombre}</div><div style="font-size:.69rem;color:var(--muted);">${fmt(i.precioVenta)} × ${fmtQty(i.cantidad, i.unidad)}</div></div><div style="text-align:right;"><div class="cart-item-qty"><button class="qty-btn" onclick="cambiarQtyCarrito(${idx},-1)">−</button><input type="number" class="mono" value="${i.cantidad}" onchange="setQtyCarrito(${idx},this.value)" style="width:50px;text-align:center;padding:.2rem;margin:0 .2rem;" ${i.isPromo?'readonly':''}><button class="qty-btn" onclick="cambiarQtyCarrito(${idx},1)">+</button></div><div class="mono" style="font-size:.75rem;margin-top:.18rem;">${fmt(i.cantidad * i.precioVenta)}</div><button onclick="quitarDeCarrito(${idx})" style="font-size:.68rem;color:var(--accent);background:none;border:none;cursor:pointer;margin-top:2px;">✕</button></div></div>`).join('');
     window.uiActualizarTotalPOS();
 };
 
@@ -194,8 +228,28 @@ window.renderProductGrid = function() {
     }).join('');
 };
 
+window.renderPromosActivasPOS = function() {
+    const container = document.getElementById('pos-promos-container');
+    if (!container) return;
+    const promos = (store.db.promociones || []).filter(p => p.activa);
+    if (promos.length === 0) {
+        container.innerHTML = '<span style="font-size:.8rem;color:var(--muted);">No hay promociones activas. Creálas en el menú Ventas.</span>';
+        return;
+    }
+    container.innerHTML = promos.map(p => `
+        <button class="btn btn-sm" style="background:var(--green-light); border:1px solid var(--green); color:var(--green); font-weight:bold; white-space:nowrap;" onclick="agregarPromoCarrito('${p.id}')">
+            ⭐ ${p.nombre} — ${fmt(p.precioPromo)}
+        </button>
+    `).join('');
+};
+
 window.filterProducts = function() {
     window.renderProductGrid();
 };
+
+// Inicialización de la vista POS
+setTimeout(() => {
+    if (typeof window.renderPromosActivasPOS === 'function') window.renderPromosActivasPOS();
+}, 500);
 
 module.exports = {};

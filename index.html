@@ -221,6 +221,7 @@
       <div style="display:flex; gap:.5rem;">
         <button class="btn btn-blue" onclick="abrirRetiroSocio()">📦 Retiro de Socios</button>
         <button class="btn btn-purple" onclick="abrirModalMuestras()">🎁 Muestras/Sorteos</button>
+        <button class="btn btn-primary" onclick="window.abrirModalAuditoria()">⚖️ Auditoría / Ajuste</button>
         <button class="btn btn-secondary" onclick="imprimirCodigosBarra()">🖨️ Códigos de Barras</button>
       </div>
       <button class="btn btn-green" onclick="guardarPreciosTodos()">💾 Guardar cambios de precios</button>
@@ -800,7 +801,41 @@
     </div>
   </div>
 </div>
+<div class="modal-overlay" id="modal-auditoria">
+  <div class="modal" style="max-width: 800px;">
+    <h2>⚖️ Auditoría y Ajuste Físico de Inventario</h2>
+    <div class="info-tooltip">Buscá o escaneá productos, contá cuántos hay en la góndola y anotá el Stock Real. Las diferencias negativas se registrarán automáticamente como pérdidas (CMV) en Gastos.</div>
 
+    <div style="display:flex; gap:10px; margin-top:1rem; margin-bottom:1rem; align-items: center;">
+      <input type="text" id="aud-search" placeholder="🔍 Buscar producto o escanear código de barras..." oninput="window.filtrarAuditoria()" style="flex:1; min-width: 0;">
+      <select id="aud-filtro" onchange="window.filtrarAuditoria()" style="width: 250px; flex-shrink: 0;">
+        <option value="todos">Todos</option>
+        <option value="diferencia">Solo con diferencias</option>
+      </select>
+    </div>
+
+    <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 5px;">
+      <table style="margin: 0;">
+        <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
+          <tr>
+            <th>Código</th>
+            <th>Producto</th>
+            <th style="text-align:center;">Stock Sistema</th>
+            <th style="text-align:center; width: 130px;">Stock Real</th>
+            <th style="text-align:center;">Diferencia</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-auditoria-items">
+          </tbody>
+      </table>
+    </div>
+
+    <div class="modal-actions" style="margin-top:1.5rem;">
+      <button class="btn btn-secondary" onclick="window.cerrarModalAuditoria()">Cerrar / Cancelar</button>
+      <button class="btn btn-primary" onclick="window.confirmarAuditoria()">Aplicar Ajustes Físicos</button>
+    </div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script src="app.js"></script>

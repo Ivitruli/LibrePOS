@@ -7,6 +7,7 @@ require('./ui_compras.js');
 require('./ui_stock.js');
 require('./ui_finanzas.js');
 require('./ui_clientes.js');
+require('./ui_ventas_historicas.js');
 
 // Utilidades locales: Corrección de Zona Horaria (Timezone Offset)
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

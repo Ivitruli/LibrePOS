@@ -80,7 +80,6 @@
         </div>
         
         <div style="margin-top: 10px; margin-bottom: 15px; border-top: 1px dashed var(--border); padding-top: 15px; display: flex; flex-direction: column; gap: 12px;">
-            
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span style="font-size: .85rem; font-weight: 600; color: var(--accent);">Descuento manual ($)</span>
                 <input type="number" id="pos-desc-manual" class="edit-inline" style="width: 80px; text-align: right;" oninput="window.uiAplicarDescuentoManual()" placeholder="0.00" min="0">
@@ -237,7 +236,11 @@
 
   <div id="vent-list" class="vent-tab active">
     <div class="card">
-      <div class="card-title">Listado de ventas</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:1rem;">
+        <div class="card-title" style="margin:0;">Listado de ventas</div>
+        <button class="btn btn-primary btn-sm" onclick="window.abrirModalVentaHistorica()">⏳ + Cargar Venta Atrasada</button>
+      </div>
+      
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.9rem;">
         <input type="date" id="vent-f-desde" style="max-width:150px;"> <input type="date" id="vent-f-hasta" style="max-width:150px;">
         <select id="vent-filtro-medio" style="max-width:165px;"><option value="">Todos los medios</option></select>
@@ -754,6 +757,46 @@
     </div>
     <div class="modal-actions" style="margin-top: 15px;">
       <button class="btn btn-secondary" onclick="document.getElementById('modal-historial-cliente').classList.remove('open')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-venta-historica">
+  <div class="modal" style="max-width: 700px;">
+    <h2>⏳ Cargar Venta Histórica / Atrasada</h2>
+    <div class="info-tooltip">Usá esta herramienta para registrar ventas de días anteriores o momentos sin sistema. Se descontará el stock actual, pero la venta figurará con la fecha y hora que elijas en los reportes.</div>
+
+    <div class="form-grid" style="margin-top:1rem;">
+      <div class="form-group"><label>Fecha Exacta *</label><input type="date" id="vh-fecha"></div>
+      <div class="form-group"><label>Hora Exacta *</label><input type="time" id="vh-hora"></div>
+      <div class="form-group"><label>Cobrado en Cuenta *</label><select id="vh-cuenta"></select></div>
+    </div>
+
+    <div style="margin-top:1rem; padding:1rem; background:var(--surface2); border-radius:8px; border: 1px solid var(--border);">
+      <h4 style="margin-top:0; margin-bottom:.5rem;">Agregar Productos Vendidos</h4>
+      <div style="display:flex; gap:5px; margin-bottom:10px;">
+        <input type="text" id="vh-prod-search" placeholder="🔍 Buscar producto..." oninput="window.buscarProdVentaHistorica()" style="flex:1;">
+        <select id="vh-prod-select" style="flex:2; display:none;"></select>
+        <input type="number" id="vh-qty" value="1" min="0.001" step="0.001" style="width:80px;" placeholder="Cant.">
+        <button class="btn btn-secondary" onclick="window.agregarItemVentaHistorica()">Añadir</button>
+      </div>
+      <table style="margin:0; font-size:.85rem;">
+        <thead><tr><th>Producto</th><th>Cant.</th><th>Precio U.</th><th>Subtotal</th><th></th></tr></thead>
+        <tbody id="tabla-vh-items"><tr><td colspan="5" style="text-align:center;color:var(--muted)">Sin productos cargados.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:1.5rem; display:flex; justify-content:space-between; align-items:center; border-top: 1px dashed var(--border); padding-top: 1rem;">
+        <div style="font-size:0.85rem; color:var(--muted);">Costo CMV Estimado: <strong id="vh-costo-total" class="mono">$0.00</strong></div>
+        <div style="text-align: right;">
+            <div style="font-size:0.75rem; font-weight:bold; color:var(--accent); text-transform:uppercase; margin-bottom:3px;">Total de la Venta</div>
+            <div id="vh-total-final" class="mono" style="font-size:1.8rem; font-weight:900; color:var(--green); line-height:1;">$0.00</div>
+        </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:1.5rem;">
+      <button class="btn btn-secondary" onclick="window.cerrarModalVentaHistorica()">Cancelar</button>
+      <button class="btn btn-primary" onclick="window.confirmarVentaHistorica()">Registrar Venta Atrasada</button>
     </div>
   </div>
 </div>

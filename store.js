@@ -81,7 +81,11 @@ const store = {
     }
 };
 
-// Inicializar la DB al cargar el módulo
+store.now = function() {
+    const local = new Date().toLocaleString('sv-SE');
+    return local.replace(' ', 'T');
+};
+
 store.db = store.loadDB();
 
 module.exports = store;

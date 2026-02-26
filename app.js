@@ -10,11 +10,7 @@ require('./ui_clientes.js');
 
 // Utilidades locales: Corrección de Zona Horaria (Timezone Offset)
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const today = () => { 
-    const d = new Date(); 
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); 
-    return d.toISOString().slice(0, 10); 
-};
+const today = () => store.now().slice(0, 10);
 
 window.showToast = function(msg, type = 'success') {
     const t = document.getElementById('toast');

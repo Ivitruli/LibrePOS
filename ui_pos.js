@@ -109,7 +109,7 @@ window.confirmarVenta = function() {
     if (isFiado && !clienteId) return window.showToast('Debe seleccionar un cliente para vender a Cuenta Corriente', 'error');
 
     const calculo = posManager.calcularTotal(chkEnvio, valorInput, isFiado);
-    const ts = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString();
+    const ts = store.now();
     const vId = Date.now().toString();
     let totV = 0, totC = 0, items = [];
     

@@ -27,6 +27,7 @@
     <button class="nav-tab" onclick="showSection('gastos',this)">💸 Gastos</button>
     <button class="nav-tab" onclick="showSection('finanzas',this)">📈 Finanzas</button>
     <button class="nav-tab" onclick="showSection('socios',this)">🤝 Socios</button>
+    <button class="nav-tab" onclick="showSection('clientes',this)">👥 Clientes</button>
     <button class="nav-tab" onclick="showSection('indicadores',this)">📊 Indicadores</button>
     <button class="nav-tab" onclick="showSection('informes',this)">📁 Informes</button>
     <button class="nav-tab" onclick="showSection('config',this)">⚙️ Config</button>
@@ -68,6 +69,16 @@
         <div class="medios-pago" id="medios-pago-btns"></div>
         <div id="cart-desc-row" style="background:var(--green-light);border:1px solid var(--green);border-radius:5px;padding:.42rem .72rem;margin-bottom:.6rem;font-size:.78rem;color:var(--green);display:none;font-weight:600;"></div>
         
+        <div style="margin-top: 10px; margin-bottom: 10px; padding: 10px; background: rgba(196,67,42,0.1); border: 1px dashed var(--accent); border-radius: 5px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+                <input type="checkbox" id="chkCtaCte" onchange="document.getElementById('pos-cliente-wrap').style.display = this.checked ? 'block' : 'none'; uiActualizarTotalPOS();">
+                <label for="chkCtaCte" style="margin: 0; font-weight: bold; color: var(--accent); cursor: pointer;">Vender a Cuenta Corriente (Fiado)</label>
+            </div>
+            <div id="pos-cliente-wrap" style="display: none;">
+                <select id="pos-cliente" style="width: 100%; margin-top: 5px;"></select>
+            </div>
+        </div>
+        
         <div style="margin-top: 10px; margin-bottom: 15px; border-top: 1px dashed var(--border); padding-top: 15px; display: flex; flex-direction: column; gap: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <button id="btnRedondeo" class="btn btn-sm btn-secondary" onclick="uiAplicarRedondeo()">Redondear (Sug: $0)</button>
@@ -98,6 +109,24 @@
         <button class="btn btn-secondary" style="width:100%;margin-top:.42rem;" onclick="limpiarCarrito()">Cancelar</button>
       </div>
     </div>
+  </div>
+</section>
+
+<section class="section" id="sec-clientes">
+  <div class="card">
+    <div class="card-title">Nuevo Cliente (Cuenta Corriente)</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre / Razón Social *</label><input type="text" id="cli-nombre"></div>
+      <div class="form-group"><label>Teléfono</label><input type="text" id="cli-tel"></div>
+      <div class="form-group"><label>Dirección</label><input type="text" id="cli-dir"></div>
+      <div class="form-group"><label>Límite de Crédito ($)</label><input type="number" id="cli-limite" step="1000" min="0" placeholder="0 = Ilimitado"></div>
+    </div>
+    <div class="info-tooltip">Establecé un límite de crédito para evitar que el cliente acumule una deuda mayor a la permitida. Dejá en 0 para crédito ilimitado.</div>
+    <div style="margin-top:1rem;"><button class="btn btn-primary" onclick="agregarCliente()">Agregar Cliente</button></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Directorio de Clientes y Estado de Cuentas</div>
+    <div id="tabla-clientes-container"></div>
   </div>
 </section>
 
@@ -518,7 +547,6 @@
       <div class="form-group"><label>Nombre de la Promoción *</label><input type="text" id="promo-nombre" placeholder="Ej: Combo Desayuno (Café + Medialunas)"></div>
       <div class="form-group"><label>Descuento a aplicar (%) *</label><input type="number" id="promo-desc" step="1" min="0" max="100" value="15" oninput="window.calcularTotalesPromo()"></div>
     </div>
-    
     <div style="margin-top:1rem; padding:1rem; background:var(--surface2); border-radius:8px; border: 1px solid var(--border);">
       <h4 style="margin-top:0; margin-bottom:.5rem;">Productos incluidos en el combo</h4>
       <div style="display:flex; gap:5px; margin-bottom:10px;">
@@ -531,7 +559,6 @@
         <tbody id="tabla-promo-items"></tbody>
       </table>
     </div>
-
     <div style="margin-top:1.5rem; display:flex; justify-content:space-between; align-items:flex-end; border-top: 1px dashed var(--border); padding-top: 1rem;">
         <div style="font-size:0.85rem; color:var(--muted); line-height: 1.5;">
             Costo Neto de Mercadería: <strong id="promo-costo" class="mono">$0.00</strong><br>
@@ -542,7 +569,6 @@
             <div id="promo-final" class="mono" style="font-size:1.8rem; font-weight:900; color:var(--green); line-height:1;">$0.00</div>
         </div>
     </div>
-
     <div class="modal-actions" style="margin-top:1.5rem;">
       <button class="btn btn-secondary" onclick="document.getElementById('modal-promo').classList.remove('open')">Cancelar</button>
       <button class="btn btn-primary" onclick="window.guardarPromoManual()">Guardar Promoción</button>
@@ -666,6 +692,62 @@
     <div class="modal-actions" style="margin-top:15px;">
         <button class="btn btn-secondary" onclick="document.getElementById('modal-precios').classList.remove('open')">Cerrar</button>
         <button class="btn btn-primary" onclick="generarPDFEtiquetas()">Imprimir Códigos (PDF)</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-edit-cliente">
+  <div class="modal">
+    <h2>Editar Cliente</h2>
+    <input type="hidden" id="ecli-id">
+    <div class="form-grid">
+      <div class="form-group"><label>Nombre / Razón Social *</label><input type="text" id="ecli-nombre"></div>
+      <div class="form-group"><label>Teléfono</label><input type="text" id="ecli-tel"></div>
+      <div class="form-group"><label>Dirección</label><input type="text" id="ecli-dir"></div>
+      <div class="form-group"><label>Límite de Crédito ($)</label><input type="number" id="ecli-limite" step="1000" min="0"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="document.getElementById('modal-edit-cliente').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEditCliente()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-cobro-cliente">
+  <div class="modal">
+    <h2>Cobrar a Cuenta Corriente</h2>
+    <input type="hidden" id="cobro-cli-id">
+    <div class="form-grid">
+      <div class="form-group"><label>Monto a cobrar ($) *</label><input type="number" id="cobro-monto" step="0.01" min="0.01"></div>
+      <div class="form-group"><label>Fecha</label><input type="date" id="cobro-fecha"></div>
+      <div class="form-group"><label>Ingresar fondos a *</label><select id="cobro-cuenta"></select></div>
+      <div class="form-group"><label>Descripción</label><input type="text" id="cobro-desc"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="document.getElementById('modal-cobro-cliente').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-green" onclick="confirmarCobroCliente()">Registrar Cobro</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-historial-cliente">
+  <div class="modal" style="max-width: 600px;">
+    <h2>Historial: <span id="historial-cli-nombre"></span></h2>
+    <div style="max-height: 400px; overflow-y: auto; margin-top: 1rem;">
+      <table style="margin-bottom: 0;">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Descripción</th>
+            <th style="text-align:right;">Cargos ($)</th>
+            <th style="text-align:right;">Pagos ($)</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-historial-cliente"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top: 15px;">
+      <button class="btn btn-secondary" onclick="document.getElementById('modal-historial-cliente').classList.remove('open')">Cerrar</button>
     </div>
   </div>
 </div>

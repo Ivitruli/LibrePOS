@@ -16,6 +16,7 @@ const store = {
     emptyDB: function() {
         return {
             productos: [], lotes: [], ventas: [], ventaItems: [], gastos: [], proveedores: [], socios: [], movimientos: [], preciosExtra: {},
+            clientes: [], cuentasCorrientes: [],
             cuentas: [
                 { id: 'c1', nombre: 'Efectivo', saldoInicial: 0 },
                 { id: 'c2', nombre: 'UALA', saldoInicial: 0 },

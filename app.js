@@ -6,10 +6,15 @@ require('./ui_pos.js');
 require('./ui_compras.js');
 require('./ui_stock.js');
 require('./ui_finanzas.js');
+require('./ui_clientes.js');
 
-// Utilidades locales
+// Utilidades locales: Corrección de Zona Horaria (Timezone Offset)
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => { 
+    const d = new Date(); 
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); 
+    return d.toISOString().slice(0, 10); 
+};
 
 window.showToast = function(msg, type = 'success') {
     const t = document.getElementById('toast');
@@ -32,6 +37,7 @@ window.showSection = function(id, btn) {
     if (id === 'gastos') { window.renderTablaGastos(); window.renderEnviosPendientes(); }
     if (id === 'finanzas') { window.renderCuentas(); window.renderFinanzasTotales(); window.renderCashflow(); }
     if (id === 'socios') window.renderSocios();
+    if (id === 'clientes') window.renderTablaClientes();
     if (id === 'indicadores') window.renderIndicadores();
     if (id === 'informes') {
         document.getElementById('inf-desde').value = new Date(new Date().setDate(1)).toISOString().slice(0, 10);
@@ -59,14 +65,31 @@ window.populateSelects = function() {
     const provs = '<option value="">— Seleccionar —</option>' + store.db.proveedores.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
     document.querySelectorAll('#np-proveedor, #ep-prod-proveedor, #deuda-prov, #comp-proveedor').forEach(s => { const val = s.value; s.innerHTML = provs; s.value = val; });
     
-    // Filtramos las cuentas para que las eliminadas lógicamente (!c.deleted) no aparezcan más en los selectores
+    // Filtramos las cuentas activas
     const ctasActivas = store.db.cuentas.filter(c => !c.deleted);
     const ctas = ctasActivas.map(c => `<option value="${c.id}">${c.nombre} (${fmt(finanzas.calcSaldoCuenta(c.id))})</option>`).join('');
     
     document.querySelectorAll('#comp-cuenta, #pd-cuenta, #gasto-cuenta, #mov-cuenta, #envios-cuenta, #transf-origen, #transf-destino').forEach(s => { const val = s.value; s.innerHTML = ctas; s.value = val || (ctasActivas[0]?.id || ''); });
+
+    // Selector específico para cobros a clientes (incluye la opción de desestimar deuda)
+    const cobroCuenta = document.getElementById('cobro-cuenta');
+    if (cobroCuenta) {
+        const valCobro = cobroCuenta.value;
+        cobroCuenta.innerHTML = ctas + '<option value="incobrable" style="color:var(--accent);font-weight:bold;">❌ Desestimar Deuda (Pasar a Pérdida)</option>';
+        cobroCuenta.value = valCobro || (ctasActivas[0]?.id || '');
+    }
     
     const socs = '<option value="">— Seleccionar —</option>' + store.db.socios.filter(s => !s.deleted).map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
     document.querySelectorAll('#mov-socio, #rs-socio').forEach(s => { const val = s.value; s.innerHTML = socs; s.value = val; });
+
+    // CARGA DE CLIENTES (CUENTA CORRIENTE)
+    const clientesDropdown = '<option value="">— Seleccionar Cliente —</option>' + (store.db.clientes || []).filter(c => !c.deleted).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+    const posClienteSelect = document.getElementById('pos-cliente');
+    if (posClienteSelect) {
+        const val = posClienteSelect.value;
+        posClienteSelect.innerHTML = clientesDropdown;
+        posClienteSelect.value = val;
+    }
     
     document.getElementById('medios-pago-btns').innerHTML = ctasActivas.map(c => `<button class="medio-btn${c.id === store.medioSeleccionado ? ' selected' : ''}" onclick="window.selectMedio('${c.id}',this)">${c.nombre}</button>`).join('');
     document.getElementById('vent-filtro-medio').innerHTML = '<option value="">Todas</option>' + ctasActivas.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
@@ -136,7 +159,7 @@ window.importarDatos = function(e) {
 // INIT GLOBAL
 window.aplicarBranding();
 window.populateSelects();
-['comp','gasto','deuda','mov'].forEach(p => {
+['comp','gasto','deuda','mov', 'cobro'].forEach(p => {
     const el = document.getElementById(`${p}-fecha`);
     if(el) el.value = today();
 });

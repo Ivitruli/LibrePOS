@@ -7,7 +7,7 @@ let arrayPreciosDesact = [];
 // Utilidades locales
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtQty = (n, u) => u === 'kg' ? Number(n).toFixed(3) + ' kg' : u === '100g' ? Number(n).toFixed(1) + '×100g' : Number(n).toFixed(0) + ' u.';
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 
 function getProveedorLoteReciente(pId) {
     const lotes = store.db.lotes.filter(l => l.productoId === pId).sort((a,b) => b.fecha.localeCompare(a.fecha));

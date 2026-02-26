@@ -12,6 +12,10 @@ const posManager = {
             document.getElementById('inputCostoEnvio').value = '';
             document.getElementById('inputCostoEnvio').style.display = 'none';
         }
+        if (document.getElementById('chkCtaCte')) {
+            document.getElementById('chkCtaCte').checked = false;
+            document.getElementById('pos-cliente-wrap').style.display = 'none';
+        }
         this.descuentoManualRedondeo = 0;
     },
 
@@ -19,7 +23,7 @@ const posManager = {
         this.descuentoManualRedondeo = parseFloat(monto) || 0;
     },
 
-    calcularTotal: function(isEnvio, costoEnvioInput) {
+    calcularTotal: function(isEnvio, costoEnvioInput, isFiado = false) {
         let subtotal = 0;
         let subtotalSujetoADescuento = 0;
         
@@ -27,7 +31,7 @@ const posManager = {
             const totalItem = item.cantidad * item.precioVenta;
             subtotal += totalItem;
             
-            // Regla de negocio: Promociones, productos al costo o con descuento propio NO reciben el descuento global en efectivo.
+            // Regla de negocio: Promociones, productos al costo o con descuento propio NO reciben el descuento global
             const ex = store.db.preciosExtra[item.productoId] || {};
             const tieneDescuentoPropio = (parseFloat(ex.desc) || 0) > 0;
             
@@ -40,7 +44,8 @@ const posManager = {
         const isEfectivo = cuentaSeleccionada && cuentaSeleccionada.nombre.toLowerCase().includes('efectivo');
         
         let descEfectivo = 0;
-        if (isEfectivo) {
+        // Si es venta a Cuenta Corriente (Fiado), no aplica descuento por efectivo
+        if (isEfectivo && !isFiado) {
             const porcentajeDesc = parseFloat(store.db.config?.descEfectivo) || 0;
             descEfectivo = subtotalSujetoADescuento * (porcentajeDesc / 100);
         }

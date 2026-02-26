@@ -2,6 +2,7 @@ const store = require('./store.js');
 const posManager = require('./pos.js');
 const inventario = require('./inventario.js');
 const finanzas = require('./finanzas.js');
+const clientes = require('./clientes.js');
 
 // Utilidades locales de formato
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -101,13 +102,26 @@ window.confirmarVenta = function() {
     const chkEnvio = document.getElementById('chkEnvio').checked;
     const inputEnvio = document.getElementById('inputCostoEnvio');
     const valorInput = chkEnvio ? inputEnvio.value : null;
+    
+    const isFiado = document.getElementById('chkCtaCte').checked;
+    const clienteId = document.getElementById('pos-cliente').value;
 
-    const calculo = posManager.calcularTotal(chkEnvio, valorInput);
-    const ts = new Date().toISOString();
+    if (isFiado && !clienteId) return window.showToast('Debe seleccionar un cliente para vender a Cuenta Corriente', 'error');
+
+    const calculo = posManager.calcularTotal(chkEnvio, valorInput, isFiado);
+    const ts = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString();
     const vId = Date.now().toString();
     let totV = 0, totC = 0, items = [];
     
     try {
+        const subtotalSinEnvio = calculo.totalFinal - calculo.envio;
+
+        // Si es a cuenta corriente, intentamos registrar la deuda PRIMERO. 
+        // Si excede el límite, el throw Error frenará la venta sin descontar stock.
+        if (isFiado) {
+            clientes.registrarDeuda(clienteId, subtotalSinEnvio, 'Compra en POS', ts.slice(0, 10), vId);
+        }
+
         for (const i of store.carrito) {
             if (i.isPromo) {
                 for (const sub of i.items) if (inventario.getStock(sub.id) < (sub.cantidad * i.cantidad) - 0.001) throw new Error(`Stock insuficiente para armar promo: ${sub.nombre}`);
@@ -134,21 +148,30 @@ window.confirmarVenta = function() {
             }
         }
         
-        const c = store.db.cuentas.find(x => x.id === store.medioSeleccionado);
-        const subtotalSinEnvio = calculo.totalFinal - calculo.envio;
+        // Asignación de cuenta: Si es fiado, va a la cuenta virtual 'cta_cte' para no sumar a la caja real.
+        const c = isFiado ? { id: 'cta_cte', nombre: 'Cuenta Corriente' } : store.db.cuentas.find(x => x.id === store.medioSeleccionado);
         
         store.db.ventas.push({ id: vId, timestamp: ts, fecha: ts.slice(0, 10), totalVenta: subtotalSinEnvio, totalCosto: totC, cuentaId: c.id, medioPago: c.nombre, descEfectivo: calculo.descEfectivo, descRedondeo: calculo.descRedondeo, costoEnvio: calculo.envio, envioPagado: false, facturada: false });
         
-        if (calculo.envio > 0) store.db.ajustesCaja.push({ id: Date.now().toString() + '_envio_in', cuentaId: c.id, fecha: ts.slice(0, 10), diferencia: calculo.envio, tipo: 'ingreso', concepto: 'Cobro de Envío al cliente' });
-        if (calculo.descRedondeo > 0) finanzas.registrarGasto(ts.slice(0, 10), 'Otros', 'variable', calculo.descRedondeo, c.id, 'Redondeo POS');
+        // El envío se cobra siempre en efectivo/cuenta real en el momento, incluso si la mercadería es fiada. 
+        // Si quisieran fiar el envío, habría que ajustar esta lógica, pero por defecto los servicios extra se cobran en el medio seleccionado.
+        if (calculo.envio > 0 && !isFiado) {
+            store.db.ajustesCaja.push({ id: Date.now().toString() + '_envio_in', cuentaId: c.id, fecha: ts.slice(0, 10), diferencia: calculo.envio, tipo: 'ingreso', concepto: 'Cobro de Envío al cliente' });
+        }
+        
+        if (calculo.descRedondeo > 0) finanzas.registrarGasto(ts.slice(0, 10), 'Otros', 'variable', calculo.descRedondeo, isFiado ? 'cta_cte' : c.id, 'Redondeo POS');
         
         store.saveDB();
         if (typeof window.populateSelects === 'function') window.populateSelects();
-        document.getElementById('resumen-venta').innerHTML = `<table style="width:100%;font-size:.82rem;margin-bottom:.8rem;">${items.map(r => `<tr><td>${r.nombre}</td><td class="mono" align="right">${fmtQty(r.q, r.u)}</td><td class="mono" align="right">${fmt(r.s)}</td></tr>`).join('')}</table><div style="font-size:1.4rem;font-weight:900;border-top:2px solid #ccc;padding-top:.5rem;">Total: ${fmt(calculo.totalFinal)}</div>`;
+        
+        let msjFiado = isFiado ? `<div style="background:var(--amber-light);color:var(--amber);padding:5px;text-align:center;font-weight:bold;margin-bottom:10px;">Fiado a: ${store.db.clientes.find(x=>x.id===clienteId)?.nombre}</div>` : '';
+        
+        document.getElementById('resumen-venta').innerHTML = `${msjFiado}<table style="width:100%;font-size:.82rem;margin-bottom:.8rem;">${items.map(r => `<tr><td>${r.nombre}</td><td class="mono" align="right">${fmtQty(r.q, r.u)}</td><td class="mono" align="right">${fmt(r.s)}</td></tr>`).join('')}</table><div style="font-size:1.4rem;font-weight:900;border-top:2px solid #ccc;padding-top:.5rem;">Total: ${fmt(calculo.totalFinal)}</div>`;
         document.getElementById('modal-venta').classList.add('open');
         posManager.limpiar();
         window.renderCarrito();
         window.renderProductGrid();
+        if(typeof window.renderTablaClientes === 'function') window.renderTablaClientes(); // Actualizar deuda visualmente
     } catch (e) { window.showToast(e.message, 'error'); }
 };
 
@@ -183,13 +206,16 @@ window.uiActualizarTotalPOS = function() {
     const chkEnvio = document.getElementById('chkEnvio').checked;
     const inputEnvio = document.getElementById('inputCostoEnvio');
     inputEnvio.style.display = chkEnvio ? 'block' : 'none';
-    const calculo = posManager.calcularTotal(chkEnvio, chkEnvio ? inputEnvio.value : null);
+    
+    const isFiado = document.getElementById('chkCtaCte')?.checked || false;
+    
+    const calculo = posManager.calcularTotal(chkEnvio, chkEnvio ? inputEnvio.value : null, isFiado);
     
     document.getElementById('btnRedondeo').innerText = `Redondear (Sug: -$${calculo.sugerido})`;
     document.getElementById('lblDescuentoAplicado').innerText = `-$${calculo.descRedondeo.toFixed(2)}`;
     if (chkEnvio && inputEnvio.value === '') inputEnvio.value = calculo.envio; 
     
-    if (calculo.descEfectivo > 0) {
+    if (calculo.descEfectivo > 0 && !isFiado) {
         document.getElementById('cart-desc-row').style.display = 'block';
         document.getElementById('cart-desc-row').textContent = `💵 Descuento (Excl. Promos): −${fmt(calculo.descEfectivo)}`;
         document.getElementById('cart-total-sin-desc-row').style.display = 'flex';
@@ -203,7 +229,8 @@ window.uiActualizarTotalPOS = function() {
 
 window.uiAplicarRedondeo = function() {
     const chk = document.getElementById('chkEnvio').checked;
-    posManager.aplicarRedondeo(posManager.calcularTotal(chk, null).sugerido);
+    const isFiado = document.getElementById('chkCtaCte')?.checked || false;
+    posManager.aplicarRedondeo(posManager.calcularTotal(chk, null, isFiado).sugerido);
     window.uiActualizarTotalPOS();
 };
 

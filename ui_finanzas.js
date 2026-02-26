@@ -10,7 +10,9 @@ const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits
 const fmtQty = (n, u) => u === 'kg' ? Number(n).toFixed(3) + ' kg' : u === '100g' ? Number(n).toFixed(1) + '×100g' : Number(n).toFixed(0) + ' u.';
 const fmtFecha = iso => { if (!iso) return '—'; const [y, m, d] = iso.split('T')[0].split('-'); return `${d}/${m}/${y}`; };
 const DIAS_SEMANA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-const today = () => store.now().toISOString().slice(0, 10);
+
+// CORRECCIÓN: store.now() ya es un string, no hace falta toISOString()
+const today = () => store.now().slice(0, 10);
 
 let chartCashflow = null;
 let promoItems = []; // Array temporal para armar el combo en el modal
@@ -96,7 +98,7 @@ window.calcularTotalesPromo = function() {
     const desc = parseFloat(document.getElementById('promo-desc').value) || 0;
     
     let precioPromo = precioNormal * (1 - desc/100);
-    if (precioPromo < costoTotal * 1.1) precioPromo = costoTotal * 1.1; // Protección: Mínimo 10% de ganancia
+    if (precioPromo < costoTotal * 1.1) precioPromo = costoTotal * 1.1; 
 
     document.getElementById('promo-costo').textContent = fmt(costoTotal);
     document.getElementById('promo-normal').textContent = fmt(precioNormal);
@@ -187,10 +189,30 @@ window.renderTablaGastos = function() {
 window.crearCuenta = function() { try { finanzas.crearCuenta(document.getElementById('nueva-cta-nombre').value, document.getElementById('nueva-cta-saldo').value); store.saveDB(); window.renderCuentas(); if(typeof window.populateSelects === 'function') window.populateSelects(); } catch(e) { window.showToast(e.message, 'error'); } };
 window.ajustarCaja = function(cId, inp) { const aj = finanzas.ajustarCaja(cId, inp.value, today()); if(aj) { store.saveDB(); window.renderCuentas(); window.renderFinanzasTotales(); window.showToast('Ajuste guardado'); } };
 window.eliminarCuenta = function(cId) { try { if(confirm('¿Estás seguro de querer ocultar y borrar esta cuenta? (Solo será posible si su saldo es exactamente $0)')) { finanzas.eliminarCuenta(cId); store.saveDB(); window.renderCuentas(); if(typeof window.populateSelects === 'function') window.populateSelects(); window.showToast('Cuenta eliminada y ocultada correctamente'); } } catch(e) { window.showToast(e.message, 'error'); } };
-window.renderCuentas = function() { document.getElementById('lista-cuentas').innerHTML = store.db.cuentas.filter(c => !c.deleted).map(c => `<div class="account-card"><div style="display:flex;justify-content:space-between;"><div class="account-name">${c.nombre}</div><button class="btn btn-danger btn-sm" onclick="window.eliminarCuenta('${c.id}')" title="Borrar cuenta" style="padding: 2px 6px;">✕</button></div><div class="account-bal">${fmt(finanzas.calcSaldoCuenta(c.id))}</div><div style="display:flex;gap:.3rem;margin-top:.5rem;"><input type="number" placeholder="Saldo Real" id="real-${c.id}" style="padding:.3rem;font-size:.8rem;"><button class="btn btn-secondary btn-sm" onclick="window.ajustarCaja('${c.id}', document.getElementById('real-${c.id}'))">Ajustar</button></div></div>`).join(''); };
+
+// CORRECCIÓN: Inyección de saldos y fechas en los desplegables de transferencia
+window.renderCuentas = function() { 
+    document.getElementById('lista-cuentas').innerHTML = store.db.cuentas.filter(c => !c.deleted).map(c => `<div class="account-card"><div style="display:flex;justify-content:space-between;"><div class="account-name">${c.nombre}</div><button class="btn btn-danger btn-sm" onclick="window.eliminarCuenta('${c.id}')" title="Borrar cuenta" style="padding: 2px 6px;">✕</button></div><div class="account-bal">${fmt(finanzas.calcSaldoCuenta(c.id))}</div><div style="display:flex;gap:.3rem;margin-top:.5rem;"><input type="number" placeholder="Saldo Real" id="real-${c.id}" style="padding:.3rem;font-size:.8rem;"><button class="btn btn-secondary btn-sm" onclick="window.ajustarCaja('${c.id}', document.getElementById('real-${c.id}'))">Ajustar</button></div></div>`).join(''); 
+    
+    const opcionesCuentas = store.db.cuentas.filter(c => !c.deleted).map(c => `<option value="${c.id}">${c.nombre} (${fmt(finanzas.calcSaldoCuenta(c.id))})</option>`).join('');
+    if(document.getElementById('transf-origen')) document.getElementById('transf-origen').innerHTML = opcionesCuentas;
+    if(document.getElementById('transf-destino')) document.getElementById('transf-destino').innerHTML = opcionesCuentas;
+    if(document.getElementById('transf-fecha') && !document.getElementById('transf-fecha').value) document.getElementById('transf-fecha').value = today();
+};
 
 window.registrarTransferencia = function() {
-    try { const origen = document.getElementById('transf-origen').value; const destino = document.getElementById('transf-destino').value; const monto = document.getElementById('transf-monto').value; const fecha = document.getElementById('transf-fecha').value; finanzas.registrarTransferencia(origen, destino, monto, fecha); store.saveDB(); window.renderCuentas(); window.renderFinanzasTotales(); window.showToast('Transferencia registrada exitosamente'); document.getElementById('transf-monto').value = ''; } catch(e) { window.showToast(e.message, 'error'); }
+    try { 
+        const origen = document.getElementById('transf-origen').value; 
+        const destino = document.getElementById('transf-destino').value; 
+        const monto = document.getElementById('transf-monto').value; 
+        const fecha = document.getElementById('transf-fecha').value; 
+        finanzas.registrarTransferencia(origen, destino, monto, fecha); 
+        store.saveDB(); 
+        window.renderCuentas(); 
+        window.renderFinanzasTotales(); 
+        window.showToast('Transferencia registrada exitosamente'); 
+        document.getElementById('transf-monto').value = ''; 
+    } catch(e) { window.showToast(e.message, 'error'); }
 };
 
 window.renderFinanzasTotales = function() { document.getElementById('fin-capital').textContent = fmt(finanzas.getPatrimonioNeto() - finanzas.calcGananciaNetaGlobal()); document.getElementById('fin-ganancia').textContent = fmt(finanzas.calcGananciaSinAsignar()); document.getElementById('fin-liquidez').textContent = fmt(store.db.cuentas.reduce((s, c) => s + finanzas.calcSaldoCuenta(c.id), 0)); };

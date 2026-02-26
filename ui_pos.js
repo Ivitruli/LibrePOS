@@ -4,7 +4,6 @@ const inventario = require('./inventario.js');
 const finanzas = require('./finanzas.js');
 const clientes = require('./clientes.js');
 
-// Utilidades locales de formato
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtQty = (n, u) => u === 'kg' ? Number(n).toFixed(3) + ' kg' : u === '100g' ? Number(n).toFixed(1) + '×100g' : u === 'combo' ? Number(n).toFixed(0) + ' promo' : Number(n).toFixed(0) + ' u.';
 
@@ -117,12 +116,11 @@ window.confirmarVenta = function() {
     const calculo = posManager.calcularTotal(chkEnvio, valorInput, isFiado);
     const subtotalSinEnvio = calculo.totalFinal - calculo.envio;
 
-    // 1. ESTIMACIÓN DE COSTOS PARA ALERTA DE PÉRDIDA (CORREGIDO)
     let costoTotalEstimado = 0;
     for (const i of store.carrito) {
         if (i.isPromo) {
             for (const sub of i.items) {
-                const costoUnidad = inventario.getPrecioCart(sub.id, true); // true = obtiene el costo real
+                const costoUnidad = inventario.getPrecioCart(sub.id, true); 
                 costoTotalEstimado += costoUnidad * sub.cantidad * i.cantidad;
             }
         } else {
@@ -131,7 +129,6 @@ window.confirmarVenta = function() {
         }
     }
 
-    // ALERTA SI SE VENDE POR DEBAJO DEL COSTO
     if (subtotalSinEnvio < costoTotalEstimado) {
         if (!confirm(`⚠️ ALERTA DE PÉRDIDA\n\nEl precio final de los productos ($${subtotalSinEnvio.toFixed(2)}) es MENOR al costo de la mercadería ($${costoTotalEstimado.toFixed(2)}).\n\n¿Estás seguro de querer registrar esta venta a pérdida?`)) {
             return;
@@ -236,7 +233,6 @@ window.uiActualizarTotalPOS = function() {
     
     document.getElementById('btnRedondeo').innerText = `Redondear (Sug: -$${calculo.sugerido})`;
     
-    // Mostramos la suma del redondeo y el descuento manual
     const descuentoTotalAplicado = calculo.descRedondeo + calculo.descExtra;
     document.getElementById('lblDescuentoAplicado').innerText = `-$${descuentoTotalAplicado.toFixed(2)}`;
     
@@ -268,7 +264,26 @@ window.renderCarrito = function() {
         document.getElementById('cart-total').textContent = '$0';
         return;
     }
-    c.innerHTML = store.carrito.map((i, idx) => `<div class="cart-item"><div><div class="cart-item-name">${i.nombre}</div><div style="font-size:.69rem;color:var(--muted);">${fmt(i.precioVenta)} × ${fmtQty(i.cantidad, i.unidad)}</div></div><div style="text-align:right;"><div class="cart-item-qty"><button class="qty-btn" onclick="cambiarQtyCarrito(${idx},-1)">−</button><input type="number" class="mono" value="${i.cantidad}" onchange="setQtyCarrito(${idx},this.value)" style="width:50px;text-align:center;padding:.2rem;margin:0 .2rem;" ${i.isPromo?'readonly':''}><button class="qty-btn" onclick="cambiarQtyCarrito(${idx},1)">+</button></div><div class="mono" style="font-size:.75rem;margin-top:.18rem;">${fmt(i.cantidad * i.precioVenta)}</div><button onclick="quitarDeCarrito(${idx})" style="font-size:.68rem;color:var(--accent);background:none;border:none;cursor:pointer;margin-top:2px;">✕</button></div></div>`).join('');
+    
+    // CORRECCIÓN: Estructura HTML del ítem del carrito para mantener todo en línea y optimizar espacio
+    c.innerHTML = store.carrito.map((i, idx) => `
+        <div class="cart-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; border-bottom: 1px dashed var(--border);">
+            <div style="flex: 1; min-width: 0; padding-right: 10px;">
+                <div class="cart-item-name" style="font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${i.nombre}">${i.nombre}</div>
+                <div style="font-size:.65rem;color:var(--muted);">${fmt(i.precioVenta)} / ${i.unidad}</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="display: flex; align-items: center; background: var(--surface2); border-radius: 4px; padding: 2px;">
+                    <button class="qty-btn" onclick="cambiarQtyCarrito(${idx},-1)" style="width: 20px; height: 20px; padding: 0; display: flex; align-items: center; justify-content: center;">−</button>
+                    <input type="number" class="mono" value="${i.cantidad}" onchange="setQtyCarrito(${idx},this.value)" style="width:40px; text-align:center; padding:0; margin:0; border:none; background:transparent; font-size: 0.75rem;" ${i.isPromo?'readonly':''}>
+                    <button class="qty-btn" onclick="cambiarQtyCarrito(${idx},1)" style="width: 20px; height: 20px; padding: 0; display: flex; align-items: center; justify-content: center;">+</button>
+                </div>
+                <div class="mono" style="font-size:.8rem; font-weight: 600; width: 60px; text-align: right;">${fmt(i.cantidad * i.precioVenta)}</div>
+                <button onclick="quitarDeCarrito(${idx})" style="font-size:.7rem; color:var(--accent); background:none; border:none; cursor:pointer; padding: 0 5px;">✕</button>
+            </div>
+        </div>
+    `).join('');
+    
     window.uiActualizarTotalPOS();
 };
 
@@ -301,9 +316,10 @@ window.filterProducts = function() {
     window.renderProductGrid();
 };
 
-// Inicialización de la vista POS
 setTimeout(() => {
     if (typeof window.renderPromosActivasPOS === 'function') window.renderPromosActivasPOS();
-}, 500);
+    if (typeof window.renderProductGrid === 'function') window.renderProductGrid();
+    if (typeof window.renderCarrito === 'function') window.renderCarrito();
+}, 150); 
 
 module.exports = {};

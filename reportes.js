@@ -4,7 +4,7 @@ const inventario = require('./inventario.js');
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtQty = (n, u) => u === 'kg' ? Number(n).toFixed(3) + ' kg' : u === '100g' ? Number(n).toFixed(1) + '×100g' : Number(n).toFixed(0) + ' u.';
 const DIAS_SEMANA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-const today = () => store.now().toISOString().slice(0, 10);
+const today = () => store.now().slice(0, 10);
 
 function etiq(nombreCuenta, tipo, isDebe) {
     let marca = '';
@@ -28,6 +28,7 @@ const reportes = {
     generarAsientosDiario: function(desde, hasta) {
         let asientos = [];
         
+        // 1. VENTAS AGRUPADAS POR DÍA
         const ventasPorDia = {};
         store.db.ventas.filter(v => v.fecha >= desde && v.fecha <= hasta).forEach(v => {
             if (!ventasPorDia[v.fecha]) ventasPorDia[v.fecha] = { cuentas: {}, totalVenta: 0, totalCosto: 0 };
@@ -45,15 +46,39 @@ const reportes = {
             asientos.push({ f: fecha + 'T23:59', r: 'Ventas Agrupadas del Día', ls: ls });
         });
 
+        // 2. COMPRAS AGRUPADAS POR COMPROBANTE/DÍA
+        const comprasAgrupadas = {};
         store.db.lotes.filter(l => l.fecha >= desde && l.fecha <= hasta).forEach(l => {
-            let p = store.db.productos.find(x => x.id === l.productoId); 
-            let m = l.cantOriginal * l.costoUnit; 
-            let ls = [{ c: etiq('Mercadería', 'A', true), d: m, h: 0 }];
-            if (l.cuentaId) { let cName = store.db.cuentas.find(c => c.id === l.cuentaId)?.nombre || 'Caja'; ls.push({ c: etiq(cName, 'A', false), d: 0, h: m }); } 
-            else { ls.push({ c: etiq('Proveedores (Comercial)', 'P', false), d: 0, h: m }); }
-            asientos.push({ f: l.fecha + 'T00:01', r: 'Compra: ' + (p ? p.nombre : 'Genérica'), ls: ls });
+            // Usamos el comprobanteId para agrupar. Si no tiene (lotes manuales o viejos), lo agrupamos por fecha + proveedor
+            const refAgrupacion = l.comprobanteId || `Manual_${l.fecha}_${l.proveedorId}`;
+            if (!comprasAgrupadas[refAgrupacion]) {
+                comprasAgrupadas[refAgrupacion] = { 
+                    fecha: l.fecha, 
+                    cuentaId: l.cuentaId, 
+                    proveedorId: l.proveedorId, 
+                    totalMonto: 0,
+                    esComprobante: !!l.comprobanteId,
+                    ref: l.comprobanteId || 'Lotes Varios'
+                };
+            }
+            comprasAgrupadas[refAgrupacion].totalMonto += (l.cantOriginal * l.costoUnit);
         });
 
+        Object.values(comprasAgrupadas).forEach(comp => {
+            if (comp.totalMonto <= 0) return;
+            let ls = [{ c: etiq('Mercadería', 'A', true), d: comp.totalMonto, h: 0 }];
+            if (comp.cuentaId) { 
+                let cName = store.db.cuentas.find(c => c.id === comp.cuentaId)?.nombre || 'Caja'; 
+                ls.push({ c: etiq(cName, 'A', false), d: 0, h: comp.totalMonto }); 
+            } else { 
+                let pName = store.db.proveedores.find(x => x.id === comp.proveedorId)?.nombre || 'Proveedores (Comercial)';
+                ls.push({ c: etiq(pName, 'P', false), d: 0, h: comp.totalMonto }); 
+            }
+            const titulo = comp.esComprobante ? `Compra: Remito/Factura ${comp.ref}` : 'Ingreso de Mercadería Manual';
+            asientos.push({ f: comp.fecha + 'T00:01', r: titulo, ls: ls });
+        });
+
+        // 3. PAGOS DE DEUDAS
         store.db.cuentasPorPagar.forEach(deuda => {
             (deuda.pagos || []).filter(p => p.fecha >= desde && p.fecha <= hasta).forEach(p => { 
                 let rDesc = p.tipo === 'descuento' ? 'Descuento Obtenido (Proveedor)' : 'Pago a Proveedor';
@@ -64,19 +89,41 @@ const reportes = {
             });
         });
 
+        // 4. GASTOS Y AUDITORÍA DE INVENTARIO
         store.db.gastos.filter(g => g.fecha >= desde && g.fecha <= hasta).forEach(g => { 
+            let rTitle = 'Registro de Gasto';
             let cName = store.db.cuentas.find(x => x.id === g.cuentaId)?.nombre || 'Caja'; 
-            asientos.push({ f: g.fecha + 'T00:03', r: 'Registro de Gasto', ls: [{ c: etiq('Gastos - ' + g.categoria, 'R-', true), d: g.importe, h: 0 }, { c: etiq(cName, 'A', false), d: 0, h: g.importe }] }); 
+            let cTipoHaber = 'A'; // El haber por defecto es un Activo (Caja) que disminuye
+            
+            // Tratamiento especial para la cuenta fantasma de auditoría de stock
+            if (g.cuentaId === 'ajuste_inv') {
+                rTitle = 'Ajuste de Stock (Faltante Físico)';
+                cName = 'Mercadería'; // El activo que disminuye es la mercadería, no la plata
+            }
+
+            asientos.push({ 
+                f: g.fecha + 'T00:03', 
+                r: rTitle, 
+                ls: [
+                    { c: etiq('Gastos - ' + g.categoria, 'R-', true), d: g.importe, h: 0 }, 
+                    { c: etiq(cName, cTipoHaber, false), d: 0, h: g.importe }
+                ] 
+            }); 
         });
 
+        // 5. MOVIMIENTOS DE SOCIOS Y CAPITAL
         store.db.movimientos.filter(m => m.fecha >= desde && m.fecha <= hasta).forEach(m => {
             let s = store.db.socios.find(x => x.id === m.socioId)?.nombre || 'Socio Desconocido'; let cName = store.db.cuentas.find(x => x.id === m.cuentaId)?.nombre || 'Caja';
             if (m.tipo === 'retiro') asientos.push({ f: m.fecha + 'T00:04', r: 'Retiro / Préstamo Socio', ls: [{ c: etiq('Cuenta Particular: ' + s, 'P/A', true), d: m.importe, h: 0 }, { c: etiq(cName, 'A', false), d: 0, h: m.importe }] });
-            if (m.tipo === 'deposito') asientos.push({ f: m.fecha + 'T00:04', r: 'Aporte / Devolución Préstamo', ls: [{ c: etiq(cName, 'A', true), d: m.importe, h: 0 }, { c: etiq('Cuenta Particular: ' + s, 'P/A', false), d: 0, h: m.importe }] });
+            
+            // CORRECCIÓN: El depósito de un socio es un aumento directo del Capital Social, no de su cuenta particular (deuda).
+            if (m.tipo === 'deposito') asientos.push({ f: m.fecha + 'T00:04', r: 'Aporte de Capital', ls: [{ c: etiq(cName, 'A', true), d: m.importe, h: 0 }, { c: etiq('Capital Social (' + s + ')', 'PN', false), d: 0, h: m.importe }] });
+            
             if (m.tipo === 'asignacion') asientos.push({ f: m.fecha + 'T00:04', r: 'Asignación Utilidades', ls: [{ c: etiq('Resultados Acumulados', 'PN', true), d: m.importe, h: 0 }, { c: etiq('Cuenta Particular: ' + s, 'P/A', false), d: 0, h: m.importe }] });
             if (m.tipo === 'reinversion') asientos.push({ f: m.fecha + 'T00:04', r: 'Reinversión Utilidades', ls: [{ c: etiq('Resultados Acumulados', 'PN', true), d: m.importe, h: 0 }, { c: etiq('Capital Social Re-invertido', 'PN', false), d: 0, h: m.importe }] });
         });
 
+        // 6. AJUSTES DE CAJA
         store.db.ajustesCaja.filter(a => a.fecha >= desde && a.fecha <= hasta).forEach(a => {
             let rDesc = a.concepto || (a.tipo === 'ingreso' ? 'Sobrante Caja' : 'Faltante Caja');
             let cName = store.db.cuentas.find(x => x.id === a.cuentaId)?.nombre || (a.cuentaId === 'virtual_desc' ? 'Ajuste Contable' : 'Caja');
@@ -84,6 +131,7 @@ const reportes = {
             else asientos.push({ f: a.fecha + 'T00:05', r: rDesc, ls: [{ c: etiq('Ajuste / Resultado Negativo', 'R-', true), d: Math.abs(a.diferencia), h: 0 }, { c: etiq(cName, 'A', false), d: 0, h: Math.abs(a.diferencia) }] });
         });
 
+        // 7. TRANSFERENCIAS
         if (store.db.transferencias) {
             store.db.transferencias.filter(t => t.fecha >= desde && t.fecha <= hasta).forEach(t => {
                 let cOrig = store.db.cuentas.find(c => c.id === t.origenId)?.nombre || 'Caja';

@@ -53,7 +53,8 @@ const finanzas = {
 
     calcSaldoSocio: function(sId) {
         let saldo = 0;
-        saldo += store.db.movimientos.filter(m => m.socioId === sId && (m.tipo === 'deposito' || m.tipo === 'asignacion')).reduce((s, m) => s + m.importe, 0);
+        // CORRECCIÓN: Un depósito es un Aporte de Capital. Solo la Asignación de Utilidades genera saldo a favor.
+        saldo += store.db.movimientos.filter(m => m.socioId === sId && m.tipo === 'asignacion').reduce((s, m) => s + m.importe, 0);
         saldo -= store.db.movimientos.filter(m => m.socioId === sId && m.tipo === 'retiro').reduce((s, m) => s + m.importe, 0);
         return saldo;
     },

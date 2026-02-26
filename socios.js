@@ -53,19 +53,20 @@ const socios = {
             const dispGlobal = finanzas.calcGananciaSinAsignar();
             if (imp > dispGlobal + 0.01) throw new Error('El monto supera la Ganancia Sin Asignar.');
             
-            const mov = { id: Date.now().toString(), socioId: socioId, cuentaId: '', fecha: fecha, tipo: tipo, importe: imp, descripcion: 'Asignación a ' + sName };
+            const mov = { id: Date.now().toString(), socioId: socioId, cuentaId: '', fecha: fecha, tipo: tipo, importe: imp, descripcion: 'Asignación de Utilidades a ' + sName };
             store.db.movimientos.push(mov);
             return mov;
         } 
         
         if (tipo === 'retiro') {
-            const mov = { id: Date.now().toString(), socioId: socioId, cuentaId: cuentaId, fecha: fecha, tipo: tipo, importe: imp, descripcion: 'Retiro de Fondos ' + sName };
+            const mov = { id: Date.now().toString(), socioId: socioId, cuentaId: cuentaId, fecha: fecha, tipo: tipo, importe: imp, descripcion: 'Retiro de Fondos / Préstamo a ' + sName };
             store.db.movimientos.push(mov);
             return mov;
         } 
         
         if (tipo === 'deposito') {
-            const mov = { id: Date.now().toString(), socioId: socioId, cuentaId: cuentaId, fecha: fecha, tipo: tipo, importe: imp, descripcion: 'Aporte de ' + sName };
+            // CORRECCIÓN: Ahora se considera un Aporte de Capital puro, no una deuda exigible
+            const mov = { id: Date.now().toString(), socioId: socioId, cuentaId: cuentaId, fecha: fecha, tipo: tipo, importe: imp, descripcion: 'Aporte de Capital de ' + sName };
             store.db.movimientos.push(mov);
             return mov;
         }

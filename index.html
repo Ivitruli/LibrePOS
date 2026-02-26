@@ -208,9 +208,19 @@
     <div style="overflow-x:auto;">
     <table id="tabla-stock-cat">
       <thead><tr>
-        <th>Código</th><th>Nombre</th><th>Unidad</th><th>Stock Min.</th>
-        <th>Stock Real</th><th>Costo Alto</th><th>+Fijo$</th><th>+Imp%</th><th>+Gan%</th><th>−Desc%</th>
-        <th title="Ignora ganancia y descuento">Al Costo</th><th>Precio final</th>
+        <th>Código</th>
+        <th>Proveedor</th>
+        <th>Nombre</th>
+        <th>Unidad</th>
+        <th>Stock Min.</th>
+        <th>Stock Real</th>
+        <th>Costo Alto</th>
+        <th>+Fijo$</th>
+        <th>+Imp%</th>
+        <th>+Gan%</th>
+        <th>-Desc%</th>
+        <th title="Ignora ganancia y descuento">Al Costo</th>
+        <th>Precio final</th>
         <th>Acciones</th>
       </tr></thead>
       <tbody id="tabla-productos"></tbody>
@@ -527,8 +537,8 @@
       <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">Importar copia (JSON)</button>
     </div>
     <div style="margin-top:1rem;padding-top:1rem;border-top:1px dashed var(--accent);">
-      <button class="btn btn-danger" onclick="if(confirm('¿Borrar TODO el sistema? Esta acción es irreversible.')){localStorage.removeItem(DB_KEY);location.reload();}">⚠ Borrar todos los datos (Reset)</button>
-    </div>
+      
+    </div><button class="btn btn-danger" onclick="if(confirm('¿Borrar TODO el sistema? Esta acción es irreversible.')){localStorage.clear();location.reload();}">⚠ Borrar todos los datos (Reset)</button>
   </div>
 </section>
 
@@ -763,43 +773,24 @@
 </div>
 
 <div class="modal-overlay" id="modal-venta-historica">
-  <div class="modal" style="max-width: 700px;">
-    <h2>⏳ Cargar Venta Histórica / Atrasada</h2>
-    <div class="info-tooltip">Usá esta herramienta para registrar ventas de días anteriores o momentos sin sistema. Se descontará el stock actual, pero la venta figurará con la fecha y hora que elijas en los reportes.</div>
+  <div class="modal" style="max-width: 500px;">
+    <h2>⏳ Cargar Ingreso Histórico (Contingencia)</h2>
+    <div class="info-tooltip">Registrá el dinero total ingresado durante un corte de luz o caída de sistema. El ajuste de stock y cálculo de costos (CMV) se debe realizar luego mediante la herramienta de Auditoría.</div>
 
     <div class="form-grid" style="margin-top:1rem;">
       <div class="form-group"><label>Fecha Exacta *</label><input type="date" id="vh-fecha"></div>
       <div class="form-group"><label>Hora Exacta *</label><input type="time" id="vh-hora"></div>
+      <div class="form-group"><label>Monto Total Cobrado ($) *</label><input type="number" id="vh-monto" step="0.01" min="0.01"></div>
       <div class="form-group"><label>Cobrado en Cuenta *</label><select id="vh-cuenta"></select></div>
-    </div>
-
-    <div style="margin-top:1rem; padding:1rem; background:var(--surface2); border-radius:8px; border: 1px solid var(--border);">
-      <h4 style="margin-top:0; margin-bottom:.5rem;">Agregar Productos Vendidos</h4>
-      <div style="display:flex; gap:5px; margin-bottom:10px;">
-        <input type="text" id="vh-prod-search" placeholder="🔍 Buscar producto..." oninput="window.buscarProdVentaHistorica()" style="flex:1;">
-        <select id="vh-prod-select" style="flex:2; display:none;"></select>
-        <input type="number" id="vh-qty" value="1" min="0.001" step="0.001" style="width:80px;" placeholder="Cant.">
-        <button class="btn btn-secondary" onclick="window.agregarItemVentaHistorica()">Añadir</button>
-      </div>
-      <table style="margin:0; font-size:.85rem;">
-        <thead><tr><th>Producto</th><th>Cant.</th><th>Precio U.</th><th>Subtotal</th><th></th></tr></thead>
-        <tbody id="tabla-vh-items"><tr><td colspan="5" style="text-align:center;color:var(--muted)">Sin productos cargados.</td></tr></tbody>
-      </table>
-    </div>
-
-    <div style="margin-top:1.5rem; display:flex; justify-content:space-between; align-items:center; border-top: 1px dashed var(--border); padding-top: 1rem;">
-        <div style="font-size:0.85rem; color:var(--muted);">Costo CMV Estimado: <strong id="vh-costo-total" class="mono">$0.00</strong></div>
-        <div style="text-align: right;">
-            <div style="font-size:0.75rem; font-weight:bold; color:var(--accent); text-transform:uppercase; margin-bottom:3px;">Total de la Venta</div>
-            <div id="vh-total-final" class="mono" style="font-size:1.8rem; font-weight:900; color:var(--green); line-height:1;">$0.00</div>
-        </div>
+      <div class="form-group"><label>Descripción / Detalle</label><input type="text" id="vh-desc" placeholder="Ej: Ventas turno mañana sin luz"></div>
     </div>
 
     <div class="modal-actions" style="margin-top:1.5rem;">
       <button class="btn btn-secondary" onclick="window.cerrarModalVentaHistorica()">Cancelar</button>
-      <button class="btn btn-primary" onclick="window.confirmarVentaHistorica()">Registrar Venta Atrasada</button>
+      <button class="btn btn-primary" onclick="window.confirmarVentaHistorica()">Registrar Ingreso</button>
     </div>
   </div>
+</div>
 </div>
 <div class="modal-overlay" id="modal-auditoria">
   <div class="modal" style="max-width: 800px;">

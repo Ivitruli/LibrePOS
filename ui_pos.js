@@ -97,27 +97,52 @@ window.agregarPromoCarrito = function(promoId) {
     window.showToast('Promo agregada al carrito');
 };
 
+window.uiAplicarDescuentoManual = function() {
+    const val = document.getElementById('pos-desc-manual').value;
+    posManager.aplicarDescuentoExtra(val);
+    window.uiActualizarTotalPOS();
+};
+
 window.confirmarVenta = function() {
     if (!store.carrito.length) return;
     const chkEnvio = document.getElementById('chkEnvio').checked;
     const inputEnvio = document.getElementById('inputCostoEnvio');
     const valorInput = chkEnvio ? inputEnvio.value : null;
     
-    const isFiado = document.getElementById('chkCtaCte').checked;
-    const clienteId = document.getElementById('pos-cliente').value;
+    const isFiado = document.getElementById('chkCtaCte')?.checked || false;
+    const clienteId = document.getElementById('pos-cliente')?.value;
 
     if (isFiado && !clienteId) return window.showToast('Debe seleccionar un cliente para vender a Cuenta Corriente', 'error');
 
     const calculo = posManager.calcularTotal(chkEnvio, valorInput, isFiado);
+    const subtotalSinEnvio = calculo.totalFinal - calculo.envio;
+
+    // 1. ESTIMACIÓN DE COSTOS PARA ALERTA DE PÉRDIDA (CORREGIDO)
+    let costoTotalEstimado = 0;
+    for (const i of store.carrito) {
+        if (i.isPromo) {
+            for (const sub of i.items) {
+                const costoUnidad = inventario.getPrecioCart(sub.id, true); // true = obtiene el costo real
+                costoTotalEstimado += costoUnidad * sub.cantidad * i.cantidad;
+            }
+        } else {
+            const costoUnidad = inventario.getPrecioCart(i.productoId, true);
+            costoTotalEstimado += costoUnidad * i.cantidad;
+        }
+    }
+
+    // ALERTA SI SE VENDE POR DEBAJO DEL COSTO
+    if (subtotalSinEnvio < costoTotalEstimado) {
+        if (!confirm(`⚠️ ALERTA DE PÉRDIDA\n\nEl precio final de los productos ($${subtotalSinEnvio.toFixed(2)}) es MENOR al costo de la mercadería ($${costoTotalEstimado.toFixed(2)}).\n\n¿Estás seguro de querer registrar esta venta a pérdida?`)) {
+            return;
+        }
+    }
+
     const ts = store.now();
     const vId = Date.now().toString();
     let totV = 0, totC = 0, items = [];
     
     try {
-        const subtotalSinEnvio = calculo.totalFinal - calculo.envio;
-
-        // Si es a cuenta corriente, intentamos registrar la deuda PRIMERO. 
-        // Si excede el límite, el throw Error frenará la venta sin descontar stock.
         if (isFiado) {
             clientes.registrarDeuda(clienteId, subtotalSinEnvio, 'Compra en POS', ts.slice(0, 10), vId);
         }
@@ -148,18 +173,16 @@ window.confirmarVenta = function() {
             }
         }
         
-        // Asignación de cuenta: Si es fiado, va a la cuenta virtual 'cta_cte' para no sumar a la caja real.
         const c = isFiado ? { id: 'cta_cte', nombre: 'Cuenta Corriente' } : store.db.cuentas.find(x => x.id === store.medioSeleccionado);
         
         store.db.ventas.push({ id: vId, timestamp: ts, fecha: ts.slice(0, 10), totalVenta: subtotalSinEnvio, totalCosto: totC, cuentaId: c.id, medioPago: c.nombre, descEfectivo: calculo.descEfectivo, descRedondeo: calculo.descRedondeo, costoEnvio: calculo.envio, envioPagado: false, facturada: false });
         
-        // El envío se cobra siempre en efectivo/cuenta real en el momento, incluso si la mercadería es fiada. 
-        // Si quisieran fiar el envío, habría que ajustar esta lógica, pero por defecto los servicios extra se cobran en el medio seleccionado.
         if (calculo.envio > 0 && !isFiado) {
             store.db.ajustesCaja.push({ id: Date.now().toString() + '_envio_in', cuentaId: c.id, fecha: ts.slice(0, 10), diferencia: calculo.envio, tipo: 'ingreso', concepto: 'Cobro de Envío al cliente' });
         }
         
         if (calculo.descRedondeo > 0) finanzas.registrarGasto(ts.slice(0, 10), 'Otros', 'variable', calculo.descRedondeo, isFiado ? 'cta_cte' : c.id, 'Redondeo POS');
+        if (calculo.descExtra > 0) finanzas.registrarGasto(ts.slice(0, 10), 'Otros', 'variable', calculo.descExtra, isFiado ? 'cta_cte' : c.id, 'Descuento Manual POS');
         
         store.saveDB();
         if (typeof window.populateSelects === 'function') window.populateSelects();
@@ -171,7 +194,7 @@ window.confirmarVenta = function() {
         posManager.limpiar();
         window.renderCarrito();
         window.renderProductGrid();
-        if(typeof window.renderTablaClientes === 'function') window.renderTablaClientes(); // Actualizar deuda visualmente
+        if(typeof window.renderTablaClientes === 'function') window.renderTablaClientes();
     } catch (e) { window.showToast(e.message, 'error'); }
 };
 
@@ -212,7 +235,11 @@ window.uiActualizarTotalPOS = function() {
     const calculo = posManager.calcularTotal(chkEnvio, chkEnvio ? inputEnvio.value : null, isFiado);
     
     document.getElementById('btnRedondeo').innerText = `Redondear (Sug: -$${calculo.sugerido})`;
-    document.getElementById('lblDescuentoAplicado').innerText = `-$${calculo.descRedondeo.toFixed(2)}`;
+    
+    // Mostramos la suma del redondeo y el descuento manual
+    const descuentoTotalAplicado = calculo.descRedondeo + calculo.descExtra;
+    document.getElementById('lblDescuentoAplicado').innerText = `-$${descuentoTotalAplicado.toFixed(2)}`;
+    
     if (chkEnvio && inputEnvio.value === '') inputEnvio.value = calculo.envio; 
     
     if (calculo.descEfectivo > 0 && !isFiado) {

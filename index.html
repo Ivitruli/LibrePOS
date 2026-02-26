@@ -80,6 +80,12 @@
         </div>
         
         <div style="margin-top: 10px; margin-bottom: 15px; border-top: 1px dashed var(--border); padding-top: 15px; display: flex; flex-direction: column; gap: 12px;">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: .85rem; font-weight: 600; color: var(--accent);">Descuento manual ($)</span>
+                <input type="number" id="pos-desc-manual" class="edit-inline" style="width: 80px; text-align: right;" oninput="window.uiAplicarDescuentoManual()" placeholder="0.00" min="0">
+            </div>
+
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <button id="btnRedondeo" class="btn btn-sm btn-secondary" onclick="uiAplicarRedondeo()">Redondear (Sug: $0)</button>
                 <span id="lblDescuentoAplicado" class="mono" style="color: var(--accent); font-weight: bold;">-$0.00</span>

@@ -2,6 +2,7 @@ const store = require('./store.js');
 
 const posManager = {
     descuentoManualRedondeo: 0,
+    descuentoManualExtra: 0,
 
     limpiar: function() {
         store.carrito = [];
@@ -16,11 +17,19 @@ const posManager = {
             document.getElementById('chkCtaCte').checked = false;
             document.getElementById('pos-cliente-wrap').style.display = 'none';
         }
+        if (document.getElementById('pos-desc-manual')) {
+            document.getElementById('pos-desc-manual').value = '';
+        }
         this.descuentoManualRedondeo = 0;
+        this.descuentoManualExtra = 0;
     },
 
     aplicarRedondeo: function(monto) {
         this.descuentoManualRedondeo = parseFloat(monto) || 0;
+    },
+
+    aplicarDescuentoExtra: function(monto) {
+        this.descuentoManualExtra = parseFloat(monto) || 0;
     },
 
     calcularTotal: function(isEnvio, costoEnvioInput, isFiado = false) {
@@ -60,7 +69,7 @@ const posManager = {
         // Sugerencia de redondeo (hacia abajo al múltiplo de 100 más cercano)
         let sugerido = totalParcial % 100;
         
-        let totalFinal = totalParcial - this.descuentoManualRedondeo;
+        let totalFinal = totalParcial - this.descuentoManualRedondeo - this.descuentoManualExtra;
 
         return {
             subtotal,
@@ -68,6 +77,7 @@ const posManager = {
             envio,
             sugerido,
             descRedondeo: this.descuentoManualRedondeo,
+            descExtra: this.descuentoManualExtra,
             totalFinal
         };
     }

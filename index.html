@@ -14,7 +14,7 @@
 </head>
 <body>
 <header>
-  <div class="header-brand">
+  <div class="d-flex align-center">
     <img id="header-logo" class="header-logo" src="" alt="Logo">
     <h1 id="header-title">Libre<span>POS</span></h1>
   </div>
@@ -38,11 +38,11 @@
 <section class="section active" id="sec-pos">
   <div id="alertas-venc-pos"></div>
   <div class="pos-layout">
-    <div style="display:flex; flex-direction:column; gap:1rem;">
-      <div class="card" style="padding-bottom: 0.5rem;">
-        <div style="font-size:.73rem;color:var(--muted);margin-bottom:.5rem;font-weight:600;text-transform:uppercase;">⭐ Combos y Promociones Activas</div>
-        <div id="pos-promos-container" style="display:flex; gap:10px; overflow-x:auto; padding-bottom:10px;">
-           <span style="font-size:.8rem;color:var(--muted);">No hay promociones activas. Creálas en el menú Ventas.</span>
+    <div class="d-flex-col gap-md">
+      <div class="card pb-sm">
+        <div class="caps-label">⭐ Combos y Promociones Activas</div>
+        <div id="pos-promos-container" class="d-flex gap-sm scroll-x pb-sm">
+           <span class="text-muted" style="font-size:.8rem;">No hay promociones activas. Creálas en el menú Ventas.</span>
         </div>
       </div>
 
@@ -50,68 +50,69 @@
         <div class="barcode-wrap">
           <input type="text" id="pos-barcode" placeholder="Esperando código... (o ENTER para confirmar venta)" oninput="handleBarcodeInput()" autofocus>
         </div>
-        <div style="font-size:.73rem;color:var(--muted);margin-bottom:.65rem;font-weight:600;">↑ Lectora de código · O buscá por nombre:</div>
-        <input type="text" id="pos-search" placeholder="Buscar por nombre o marca..." oninput="filterProducts()" style="margin-bottom:.85rem;">
+        <div class="caps-label mb-sm">↑ Lectora de código · O buscá por nombre:</div>
+        <input type="text" id="pos-search" class="mb-sm" placeholder="Buscar por nombre o marca..." oninput="filterProducts()">
         <div class="product-grid" id="product-grid"></div>
       </div>
     </div>
+    
     <div class="cart-panel">
       <div class="cart-header">🛒 Venta actual</div>
-      <div class="cart-items" id="cart-items"><div style="padding:2rem 1rem;text-align:center;color:var(--muted);font-size:.82rem;">Seleccioná productos</div></div>
+      <div class="cart-items" id="cart-items"><div class="p-1 text-center text-muted">Seleccioná productos</div></div>
       <div class="cart-footer">
         
-        <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.8rem;background:var(--surface2);padding:.4rem;border-radius:5px;">
+        <div class="d-flex align-center gap-sm mb-sm p-sm bg-surface2">
           <input type="checkbox" id="cart-venta-costo" onchange="toggleCartCosto()"> 
-          <label for="cart-venta-costo" style="color:var(--ink);cursor:pointer;margin:0;">Aplicar Venta al Costo a todo el carrito</label>
+          <label for="cart-venta-costo" style="margin:0; cursor:pointer; color:var(--text);">Aplicar Venta al Costo a todo el carrito</label>
         </div>
         
-        <div style="font-size:.69rem;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:.38rem;">Medio de pago</div>
+        <div class="caps-label" style="margin-bottom:.38rem;">Medio de pago</div>
         <div class="medios-pago" id="medios-pago-btns"></div>
-        <div id="cart-desc-row" style="background:var(--green-light);border:1px solid var(--green);border-radius:5px;padding:.42rem .72rem;margin-bottom:.6rem;font-size:.78rem;color:var(--green);display:none;font-weight:600;"></div>
+        <div id="cart-desc-row" style="background:var(--green-light); border:1px solid var(--green); border-radius:5px; padding:.42rem .72rem; margin-bottom:.6rem; font-size:.78rem; display:none;" class="text-green"></div>
         
-        <div style="margin-top: 10px; margin-bottom: 10px; padding: 10px; background: rgba(196,67,42,0.1); border: 1px dashed var(--accent); border-radius: 5px;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+        <div class="alert-box">
+            <div class="d-flex align-center gap-sm mb-sm">
                 <input type="checkbox" id="chkCtaCte" onchange="document.getElementById('pos-cliente-wrap').style.display = this.checked ? 'block' : 'none'; uiActualizarTotalPOS();">
-                <label for="chkCtaCte" style="margin: 0; font-weight: bold; color: var(--accent); cursor: pointer;">Vender a Cuenta Corriente (Fiado)</label>
+                <label for="chkCtaCte" class="text-accent" style="margin:0; cursor:pointer;">Vender a Cuenta Corriente (Fiado)</label>
             </div>
             <div id="pos-cliente-wrap" style="display: none;">
-                <select id="pos-cliente" style="width: 100%; margin-top: 5px;"></select>
+                <select id="pos-cliente" class="w-full mt-1"></select>
             </div>
         </div>
         
-        <div style="margin-top: 10px; margin-bottom: 15px; border-top: 1px dashed var(--border); padding-top: 15px; display: flex; flex-direction: column; gap: 12px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: .85rem; font-weight: 600; color: var(--accent);">Descuento manual ($)</span>
-                <input type="number" id="pos-desc-manual" class="edit-inline" style="width: 80px; text-align: right;" oninput="window.uiAplicarDescuentoManual()" placeholder="0.00" min="0">
+        <div class="dashed-divider d-flex-col gap-md">
+            <div class="d-flex justify-between align-center">
+                <span class="text-accent" style="font-size: .85rem;">Descuento manual ($)</span>
+                <input type="number" id="pos-desc-manual" class="edit-inline" oninput="window.uiAplicarDescuentoManual()" placeholder="0.00" min="0">
             </div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="d-flex justify-between align-center">
                 <button id="btnRedondeo" class="btn btn-sm btn-secondary" onclick="uiAplicarRedondeo()">Redondear (Sug: $0)</button>
-                <span id="lblDescuentoAplicado" class="mono" style="color: var(--accent); font-weight: bold;">-$0.00</span>
+                <span id="lblDescuentoAplicado" class="mono text-accent">-$0.00</span>
             </div>
 
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="d-flex justify-between align-center">
+                <div class="d-flex align-center gap-sm">
                     <input type="checkbox" id="chkEnvio" onchange="uiActualizarTotalPOS()">
-                    <label for="chkEnvio" style="margin: 0; font-size: .85rem;">Envío a dom.</label>
+                    <label for="chkEnvio" style="margin:0; font-size:.85rem;">Envío a dom.</label>
                 </div>
-                <input type="number" id="inputCostoEnvio" class="edit-inline" style="display: none; width: 80px;" oninput="uiActualizarTotalPOS()" placeholder="Costo $">
+                <input type="number" id="inputCostoEnvio" class="edit-inline" style="display:none; width:80px;" oninput="uiActualizarTotalPOS()" placeholder="Costo $">
             </div>
         </div>
 
         <div class="cart-totales">
           <div class="cart-total-row" id="cart-total-sin-desc-row" style="display:none;">
-            <span style="font-size:.72rem;text-transform:uppercase;color:var(--muted);font-weight:600;">Sin descuento</span>
-            <span class="mono" id="cart-total-sin-desc" style="font-size:1rem;color:var(--muted);text-decoration:line-through;"></span>
+            <span class="caps-label" style="margin:0;">Sin descuento</span>
+            <span class="mono text-muted" id="cart-total-sin-desc" style="font-size:1rem; text-decoration:line-through;"></span>
           </div>
-          <div class="cart-total-row" style="border-top: 2px solid var(--ink); padding-top: 10px;">
-            <span style="font-size:.72rem;text-transform:uppercase;color:var(--muted);font-weight:600;" id="cart-total-label">Total</span>
+          <div class="cart-total-row" style="border-top: 2px solid var(--text); padding-top: 10px; margin-top: 5px;">
+            <span class="caps-label" id="cart-total-label" style="margin:0;">Total</span>
             <span class="cart-total-amount" id="cart-total">$0</span>
           </div>
         </div>
         
-        <button class="btn btn-green" style="width:100%;font-size:.95rem;padding:.82rem;margin-top:15px;" onclick="confirmarVenta()">Confirmar venta (Enter)</button>
-        <button class="btn btn-secondary" style="width:100%;margin-top:.42rem;" onclick="limpiarCarrito()">Cancelar</button>
+        <button class="btn btn-success w-full mt-1" style="font-size:.95rem; padding:.82rem;" onclick="confirmarVenta()">✅ Confirmar Venta (Enter)</button>
+        <button class="btn btn-danger w-full mt-1" onclick="limpiarCarrito()">🗑️ Cancelar Venta</button>
       </div>
     </div>
   </div>
@@ -127,7 +128,7 @@
       <div class="form-group"><label>Límite de Crédito ($)</label><input type="number" id="cli-limite" step="1000" min="0" placeholder="0 = Ilimitado"></div>
     </div>
     <div class="info-tooltip">Establecé un límite de crédito para evitar que el cliente acumule una deuda mayor a la permitida. Dejá en 0 para crédito ilimitado.</div>
-    <div style="margin-top:1rem;"><button class="btn btn-primary" onclick="agregarCliente()">Agregar Cliente</button></div>
+    <div class="mt-1"><button class="btn btn-primary" onclick="agregarCliente()">Agregar Cliente</button></div>
   </div>
   <div class="card">
     <div class="card-title">Directorio de Clientes y Estado de Cuentas</div>
@@ -154,27 +155,27 @@
     <div class="form-grid">
       <div class="form-group">
         <label>Código de barras / interno *</label>
-        <div style="display:flex;gap:5px;">
+        <div class="d-flex gap-sm">
           <input type="text" id="comp-barcode" placeholder="Escaneá o escribí" onblur="buscarProdCompra()">
           <button class="btn btn-secondary" onclick="document.getElementById('comp-barcode').value = compras.generarCodigoInterno(); buscarProdCompra();" title="Generar código interno automático">⚙️</button>
         </div>
       </div>
-      <div class="form-group"><label>Producto (autocompletado)</label><input type="text" id="comp-prod-nombre" readonly style="background:var(--surface2);" placeholder="—"><input type="hidden" id="comp-prod-id"></div>
+      <div class="form-group"><label>Producto (autocompletado)</label><input type="text" id="comp-prod-nombre" readonly class="bg-surface2" placeholder="—"><input type="hidden" id="comp-prod-id"></div>
       <div class="form-group"><label>Cantidad *</label><input type="number" id="comp-cantidad" step="0.001" min="0" placeholder="0"></div>
       <div class="form-group"><label>Costo unitario ($) *</label><input type="number" id="comp-costo" step="0.01" min="0" placeholder="0.00"></div>
       <div class="form-group"><label>Vencimiento</label><input type="date" id="comp-venc"></div>
     </div>
     
-    <div style="margin-top:1rem; text-align:right;">
+    <div class="mt-1 text-right">
       <button class="btn btn-secondary" onclick="agregarItemRemito()">+ Añadir al listado</button>
     </div>
 
-    <table style="margin-top:15px;">
+    <table class="mt-1">
       <thead><tr><th>Código</th><th>Producto</th><th>Cant.</th><th>Costo U.</th><th>Subtotal</th><th>Venc.</th><th></th></tr></thead>
       <tbody id="tabla-remito-items"></tbody>
     </table>
 
-    <div style="margin-top:1.5rem; padding-top:1rem; border-top:2px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+    <div class="dashed-divider d-flex justify-between align-center">
       <div style="font-size:1.2rem; font-weight:bold;">Total Remito: <span class="mono" id="comp-total-remito">$0.00</span></div>
       <button class="btn btn-primary" onclick="confirmarRemitoCompleto()">Registrar Compra y Actualizar Stock</button>
     </div>
@@ -185,56 +186,44 @@
   <div id="alertas-venc-stock"></div>
   <div class="card">
     <div class="card-title">Reglas de precios globales</div>
-    <div style="display:flex;gap:.85rem;align-items:flex-end;flex-wrap:wrap;">
-      <div class="form-group"><label>Descuento por pago en Efectivo (%)</label><input type="number" id="cfg-desc-efectivo" step="0.5" min="0" max="50" placeholder="10" value="10"></div>
+    <div class="d-flex align-end flex-wrap gap-md">
+      <div class="form-group"><label>Descuento pago en Efectivo (%)</label><input type="number" id="cfg-desc-efectivo" step="0.5" min="0" max="50" placeholder="10" value="10"></div>
       <button class="btn btn-primary" onclick="guardarDescEfectivo()">Guardar regla</button>
     </div>
-    <div class="info-tooltip">Se aplica en POS al elegir Efectivo. Productos con "Venta al Costo", "Promociones/Combos" o "−Desc%" propio en la tabla de abajo NO reciben este descuento extra.</div>
+    <div class="info-tooltip">Se aplica en POS al elegir Efectivo. Productos con "Venta al Costo", "Promociones" o "−Desc%" propio NO reciben este descuento extra.</div>
   </div>
   
   <div class="card">
     <div class="card-title">Catálogo — Modificación y Precios</div>
     
-    <div style="display:flex;gap:.5rem;margin-bottom:.95rem; align-items:center; flex-wrap:wrap;">
-      <input type="text" id="stock-search" placeholder="🔍 Buscar por nombre, marca, código..." oninput="renderTablaProductos()" style="flex:1; min-width:200px;">
+    <div class="d-flex align-center flex-wrap gap-sm mb-1">
+      <input type="text" id="stock-search" placeholder="🔍 Buscar por nombre, marca, código..." oninput="renderTablaProductos()" class="flex-1" style="min-width:200px;">
       <select id="stock-sort" onchange="renderTablaProductos()" style="max-width:200px;">
          <option value="nombre">Ordenar por Nombre</option>
          <option value="venc">Ordenar por Vencimiento</option>
          <option value="prov">Ordenar por Proveedor</option>
       </select>
-      <button class="btn btn-amber" onclick="abrirModalPreciosDesactualizados()">⚠️ Revisar Precios en Góndola</button>
+      <button class="btn btn-danger" onclick="abrirModalPreciosDesactualizados()">⚠️ Revisar Precios en Góndola</button>
     </div>
     
-    <div style="overflow-x:auto;">
+    <div class="scroll-x">
     <table id="tabla-stock-cat">
       <thead><tr>
-        <th>Código</th>
-        <th>Proveedor</th>
-        <th>Nombre</th>
-        <th>Unidad</th>
-        <th>Stock Min.</th>
-        <th>Stock Real</th>
-        <th>Costo Alto</th>
-        <th>+Fijo$</th>
-        <th>+Imp%</th>
-        <th>+Gan%</th>
-        <th>-Desc%</th>
-        <th title="Ignora ganancia y descuento">Al Costo</th>
-        <th>Precio final</th>
-        <th>Acciones</th>
+        <th>Código</th><th>Proveedor</th><th>Nombre</th><th>Unidad</th><th>Stock Min.</th><th>Stock Real</th>
+        <th>Costo Alto</th><th>+Fijo$</th><th>+Imp%</th><th>+Gan%</th><th>-Desc%</th><th title="Ignora ganancia y descuento">Al Costo</th><th>Precio final</th><th>Acciones</th>
       </tr></thead>
       <tbody id="tabla-productos"></tbody>
     </table>
     </div>
     
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.75rem; flex-wrap:wrap; gap:.5rem;">
-      <div style="display:flex; gap:.5rem;">
-        <button class="btn btn-blue" onclick="abrirRetiroSocio()">📦 Retiro de Socios</button>
-        <button class="btn btn-purple" onclick="abrirModalMuestras()">🎁 Muestras/Sorteos</button>
-        <button class="btn btn-primary" onclick="window.abrirModalAuditoria()">⚖️ Auditoría / Ajuste</button>
+    <div class="d-flex justify-between align-center flex-wrap mt-1 gap-sm">
+      <div class="d-flex gap-sm">
+        <button class="btn btn-secondary" onclick="abrirRetiroSocio()">📦 Retiro de Socios</button>
+        <button class="btn btn-secondary" onclick="abrirModalMuestras()">🎁 Muestras/Sorteos</button>
+        <button class="btn btn-secondary" onclick="window.abrirModalAuditoria()">⚖️ Auditoría / Ajuste</button>
         <button class="btn btn-secondary" onclick="imprimirCodigosBarra()">🖨️ Códigos de Barras</button>
       </div>
-      <button class="btn btn-green" onclick="guardarPreciosTodos()">💾 Guardar cambios de precios</button>
+      <button class="btn btn-success" onclick="guardarPreciosTodos()">💾 Guardar cambios de precios</button>
     </div>
   </div>
 </section>
@@ -247,12 +236,12 @@
 
   <div id="vent-list" class="vent-tab active">
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:1rem;">
-        <div class="card-title" style="margin:0;">Listado de ventas</div>
+      <div class="d-flex justify-between align-center flex-wrap mb-1">
+        <div class="card-title" style="margin:0; border:none;">Listado de ventas</div>
         <button class="btn btn-primary btn-sm" onclick="window.abrirModalVentaHistorica()">⏳ + Cargar Venta Atrasada</button>
       </div>
       
-      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:.9rem;">
+      <div class="d-flex align-center flex-wrap gap-sm mb-1">
         <input type="date" id="vent-f-desde" style="max-width:150px;"> <input type="date" id="vent-f-hasta" style="max-width:150px;">
         <select id="vent-filtro-medio" style="max-width:165px;"><option value="">Todos los medios</option></select>
         <select id="vent-filtro-fact" style="max-width:165px;"><option value="">Todas</option><option value="si">Facturadas</option><option value="no">Sin facturar</option></select>
@@ -262,29 +251,29 @@
         <thead><tr><th>Fecha/Hora</th><th>Productos</th><th>Total</th><th>Desc. ef.</th><th>Medio</th><th>Facturada</th></tr></thead>
         <tbody id="tabla-ventas-menu"></tbody>
       </table>
-      <div id="ventas-resumen-row" style="text-align:right;padding:.7rem;font-family:'DM Mono',monospace;font-weight:600;"></div>
+      <div id="ventas-resumen-row" class="text-right p-sm mono font-bold"></div>
     </div>
   </div>
 
-  <div id="vent-promo" class="vent-tab" style="display:none;">
-    <div class="card" style="border-left: 4px solid var(--green);">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
+  <div id="vent-promo" class="vent-tab">
+    <div class="card border-left-green">
+      <div class="d-flex justify-between align-center">
           <div class="card-title" style="margin:0; border:none;">Mis Promociones Activas</div>
-          <button class="btn btn-green" onclick="window.abrirModalNuevaPromo()">+ Crear Promo Manual</button>
+          <button class="btn btn-primary" onclick="window.abrirModalNuevaPromo()">+ Crear Promo Manual</button>
       </div>
-      <div class="info-tooltip" style="margin-top:1rem;">Las promociones creadas aquí aparecerán como botones rápidos en la Caja Registradora (POS). No reciben el descuento general en efectivo para proteger la rentabilidad.</div>
+      <div class="info-tooltip mt-1">Las promociones creadas aquí aparecerán como botones rápidos en la Caja Registradora (POS). No reciben el descuento general en efectivo.</div>
       <div id="lista-promos-activas" style="margin-top:1.5rem; display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:1rem;"></div>
     </div>
 
     <div class="card">
       <div class="card-title">Sugerencias del Algoritmo (Market Basket Analysis)</div>
-      <div class="info-tooltip">Calcula agrupaciones de productos que se venden juntos con mayor frecuencia. Te sugiere un descuento inteligente garantizando que el combo siempre genere una ganancia mínima del 10% sobre los costos, y evitando que sea más barato comprarlo por separado en efectivo.</div>
-      <div style="margin-top:.85rem;margin-bottom:1rem;">
+      <div class="info-tooltip">Calcula agrupaciones de productos que se venden juntos con frecuencia. Te sugiere un descuento garantizando una ganancia mínima del 10%.</div>
+      <div class="mt-1 mb-1">
          <button class="btn btn-primary" onclick="generarAnalisisPromociones()">Ejecutar Análisis y Mostrar Sugerencias</button>
       </div>
       <table>
         <thead><tr><th>Combinación Sugerida</th><th>Ventas Conjuntas</th><th>Precio Recomendado</th><th></th></tr></thead>
-        <tbody id="tabla-promociones"><tr><td colspan="4" style="text-align:center;color:var(--muted)">Ejecutá el análisis para ver el Top 10.</td></tr></tbody>
+        <tbody id="tabla-promociones"><tr><td colspan="4" class="text-center text-muted">Ejecutá el análisis para ver el Top 10.</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -296,7 +285,7 @@
     <button class="tab-pill" onclick="showProvTab('deudas',this)">Cuentas por Pagar (Deudas)</button>
   </div>
   
-  <div id="prov-list" class="prov-tab">
+  <div id="prov-list" class="prov-tab active">
     <div class="card">
       <div class="card-title">Nuevo proveedor</div>
       <div class="form-grid">
@@ -304,19 +293,19 @@
         <div class="form-group"><label>Contacto</label><input type="text" id="prov-contacto"></div>
         <div class="form-group"><label>Teléfono</label><input type="text" id="prov-tel"></div>
         <div class="form-group"><label>Días de Pedido</label>
-          <select id="prov-dias-pedido" multiple style="height:70px;padding:.2rem;"><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option></select>
+          <select id="prov-dias-pedido" multiple style="height:70px;"><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option></select>
         </div>
         <div class="form-group"><label>Días de Entrega</label>
-          <select id="prov-dias-entrega" multiple style="height:70px;padding:.2rem;"><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option></select>
+          <select id="prov-dias-entrega" multiple style="height:70px;"><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option><option value="6">Sábado</option></select>
         </div>
       </div>
       <div class="info-tooltip">Mantené presionado CTRL (o CMD en Mac) para seleccionar varios días.</div>
-      <div style="margin-top:.95rem;"><button class="btn btn-primary" onclick="agregarProveedor()">Agregar proveedor</button></div>
+      <div class="mt-1"><button class="btn btn-primary" onclick="agregarProveedor()">Agregar proveedor</button></div>
     </div>
     <div class="card"><div class="card-title">Proveedores registrados</div><div id="tabla-proveedores-container"></div></div>
   </div>
 
-  <div id="prov-deudas" class="prov-tab" style="display:none;">
+  <div id="prov-deudas" class="prov-tab">
     <div class="card">
       <div class="card-title">Registrar deuda manual a proveedor</div>
       <div class="form-grid">
@@ -324,7 +313,7 @@
         <div class="form-group"><label>Fecha *</label><input type="date" id="deuda-fecha"></div>
         <div class="form-group"><label>Monto a deber ($) *</label><input type="number" id="deuda-monto" step="0.01" min="0"></div>
         <div class="form-group"><label>Descripción</label><input type="text" id="deuda-desc" placeholder="Ej: Saldo factura A-001"></div>
-        <div class="form-group" style="justify-content:flex-end;"><button class="btn btn-primary" onclick="registrarDeuda()">Registrar Deuda</button></div>
+        <div class="form-group justify-end"><button class="btn btn-primary" onclick="registrarDeuda()">Registrar Deuda</button></div>
       </div>
     </div>
     <div class="card">
@@ -336,11 +325,11 @@
 </section>
 
 <section class="section" id="sec-gastos">
-  <div class="card" style="margin-bottom: 1rem; border-left: 4px solid var(--accent);">
+  <div class="card border-left-accent mb-1">
     <div class="card-title">Logística: Envíos Pendientes (Cadetería)</div>
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
-       <div style="font-size:1.2rem; font-weight:bold;">Acumulado a pagar: <span id="envios-pendientes-total" class="mono" style="color:var(--accent);">$0.00</span></div>
-       <div style="display:flex; gap:10px; align-items:center;">
+    <div class="d-flex justify-between align-center flex-wrap gap-md">
+       <div style="font-size:1.2rem; font-weight:bold;">Acumulado a pagar: <span id="envios-pendientes-total" class="mono text-accent">$0.00</span></div>
+       <div class="d-flex align-center gap-sm">
           <select id="envios-cuenta"></select>
           <button class="btn btn-primary" onclick="pagarCadete()">Liquidar a Cadete</button>
        </div>
@@ -361,7 +350,7 @@
       <div class="form-group"><label>Pagado desde cuenta *</label><select id="gasto-cuenta"></select></div>
       <div class="form-group"><label>Descripción</label><input type="text" id="gasto-desc"></div>
     </div>
-    <div style="margin-top:1rem;"><button class="btn btn-primary" onclick="registrarGasto()">Registrar gasto</button></div>
+    <div class="mt-1"><button class="btn btn-primary" onclick="registrarGasto()">Registrar gasto</button></div>
   </div>
   <div class="card">
     <div class="card-title">Historial de gastos</div>
@@ -373,17 +362,17 @@
 <section class="section" id="sec-finanzas">
   <div class="stat-grid">
     <div class="stat-card"><div class="stat-label">Capital Propio</div><div class="stat-value" id="fin-capital">...</div><div class="stat-sub">Patrimonio Neto − Ganancias</div></div>
-    <div class="stat-card" style="border-left-color:var(--green);"><div class="stat-label">Ganancia Sin Asignar</div><div class="stat-value" style="color:var(--green)" id="fin-ganancia">...</div><div class="stat-sub">Disponible para reinvertir o asignar a socios</div></div>
-    <div class="stat-card" style="border-left-color:var(--ink);"><div class="stat-label">Liquidez Total</div><div class="stat-value" id="fin-liquidez">...</div><div class="stat-sub">Dinero real en todas las cuentas</div></div>
+    <div class="stat-card" style="border-left-color:var(--green);"><div class="stat-label">Ganancia Sin Asignar</div><div class="stat-value text-green" id="fin-ganancia">...</div><div class="stat-sub">Disponible para reinvertir o asignar a socios</div></div>
+    <div class="stat-card" style="border-left-color:var(--text);"><div class="stat-label">Liquidez Total</div><div class="stat-value" id="fin-liquidez">...</div><div class="stat-sub">Dinero real en todas las cuentas</div></div>
   </div>
   
   <div class="card">
     <div class="card-title">Cuentas y Medios de Pago (Ajuste de Caja)</div>
-    <div class="info-tooltip" style="margin-bottom:1rem;">El <strong>Saldo Sistema</strong> se calcula automáticamente. Si contaste la plata y hay diferencia, ingresá el <strong>Saldo Real</strong> y ajustá para crear un asiento contable automático.</div>
+    <div class="info-tooltip mb-1">El <strong>Saldo Sistema</strong> se calcula automáticamente. Si contaste la plata y hay diferencia, ingresá el <strong>Saldo Real</strong> y ajustá para crear un asiento automático.</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;" id="lista-cuentas"></div>
-    <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border);">
-      <h4 style="font-size:.9rem;margin-bottom:.5rem;">Crear nueva cuenta</h4>
-      <div style="display:flex;gap:.5rem;">
+    <div class="dashed-divider">
+      <h4 class="mb-sm">Crear nueva cuenta</h4>
+      <div class="d-flex gap-sm">
         <input type="text" id="nueva-cta-nombre" placeholder="Ej: Banco Galicia" style="max-width:200px;">
         <input type="number" id="nueva-cta-saldo" placeholder="Saldo inicial ($)" style="max-width:150px;">
         <button class="btn btn-secondary" onclick="crearCuenta()">Añadir Cuenta</button>
@@ -399,8 +388,8 @@
       <div class="form-group"><label>Monto a transferir ($) *</label><input type="number" id="transf-monto" step="0.01" min="0.01"></div>
       <div class="form-group"><label>Fecha *</label><input type="date" id="transf-fecha"></div>
     </div>
-    <div style="margin-top:1rem;">
-      <button class="btn btn-blue" onclick="registrarTransferencia()">Registrar Movimiento</button>
+    <div class="mt-1">
+      <button class="btn btn-success" onclick="registrarTransferencia()">Registrar Movimiento</button>
     </div>
   </div>
 
@@ -414,7 +403,7 @@
   </div>
   <div class="card">
     <div class="card-title">Socios y Cuentas Particulares</div>
-    <div style="display:flex;gap:.5rem;align-items:flex-end;margin-bottom:.95rem;">
+    <div class="d-flex align-end gap-sm mb-1">
       <div class="form-group"><label>Nombre</label><input type="text" id="socio-nombre"></div>
       <div class="form-group"><label>DNI / CUIT</label><input type="text" id="socio-dni" placeholder="Sin puntos"></div>
       <button class="btn btn-primary" onclick="agregarSocio()">Crear Socio</button>
@@ -428,10 +417,10 @@
       <div class="form-group"><label>Socio *</label><select id="mov-socio"></select></div>
       <div class="form-group"><label>Operación Contable *</label>
         <select id="mov-tipo" onchange="document.getElementById('mov-cuenta-wrap').style.display=(this.value==='asignacion'||this.value==='reinversion')?'none':'flex'">
-          <option value="deposito">📥 Depósito de Capital (Socio aporta dinero a la empresa)</option>
-          <option value="asignacion">📊 Asignar Ganancia (Pasar utilidades al saldo personal del socio)</option>
-          <option value="retiro">📤 Retirar Fondos / Préstamo (Puede quedar en negativo si extrae de más)</option>
-          <option value="reinversion">♻️ Reinvertir Utilidades (Pasa Ganancia libre a Capital Propio General)</option>
+          <option value="deposito">📥 Depósito de Capital</option>
+          <option value="asignacion">📊 Asignar Ganancia</option>
+          <option value="retiro">📤 Retirar Fondos / Préstamo</option>
+          <option value="reinversion">♻️ Reinvertir Utilidades</option>
         </select>
       </div>
       <div class="form-group"><label>Monto ($) *</label><input type="number" id="mov-importe" step="0.01"></div>
@@ -439,7 +428,7 @@
       <div class="form-group"><label>Fecha</label><input type="date" id="mov-fecha"></div>
     </div>
     <div class="info-tooltip">Para <strong>Reinvertir utilidades</strong>, no es necesario seleccionar a un socio en particular.</div>
-    <div style="margin-top:1rem;"><button class="btn btn-primary" onclick="registrarMovimientoSocio()">Registrar Operación</button></div>
+    <div class="mt-1"><button class="btn btn-primary" onclick="registrarMovimientoSocio()">Registrar Operación</button></div>
   </div>
 </section>
 
@@ -449,19 +438,19 @@
 
 <section class="section" id="sec-informes">
   <div id="informe-body">
-    <div class="tabs-row" style="margin-bottom:1rem;">
+    <div class="tabs-row mb-1">
       <button class="tab-pill active" onclick="showInfTab('resumen',this)">Resumen de Ventas</button>
       <button class="tab-pill" onclick="showInfTab('diario',this)">Libro Diario</button>
       <button class="tab-pill" onclick="showInfTab('vencimientos',this)">Próximos Vencimientos</button>
     </div>
     
     <div id="inf-resumen" class="inf-tab active">
-      <div class="report-controls" style="margin-bottom:1rem;background:var(--surface);padding:1rem;border-radius:10px;">
+      <div class="mb-1 p-1 bg-surface2">
         <div class="form-group"><label>Desde</label><input type="date" id="inf-desde"></div>
         <div class="form-group"><label>Hasta</label><input type="date" id="inf-hasta"></div>
         <button class="btn btn-primary" onclick="generarInforme()">Generar informe de ventas</button>
-        <button class="btn btn-secondary" onclick="generarListaPrecios()"><span style="color:var(--accent)">📄 PDF</span> Lista Precios</button>
-        <button class="btn btn-secondary" onclick="generarPDFPedidos()"><span style="color:var(--blue)">📦 PDF</span> Pedidos</button>
+        <button class="btn btn-secondary" onclick="generarListaPrecios()">📄 PDF Lista Precios</button>
+        <button class="btn btn-secondary" onclick="generarPDFPedidos()">📦 PDF Pedidos</button>
       </div>
       <div class="stat-grid" id="stat-grid"></div>
       <div class="card"><div class="card-title">Detalle de ventas del período</div>
@@ -470,22 +459,22 @@
       </div>
     </div>
     
-    <div id="inf-diario" class="inf-tab" style="display:none;">
+    <div id="inf-diario" class="inf-tab">
       <div class="card">
         <div class="card-title">Libro Diario General</div>
-        <div class="info-tooltip" style="margin-bottom:1rem;">Nomenclatura patrimonial: <strong>(+A/-A)</strong> Activos, <strong>(+P/-P)</strong> Pasivos, <strong>(+PN/-PN)</strong> Patrimonio Neto, <strong>(+R+/-R-)</strong> Resultados.</div>
-        <table><thead><tr><th>Fecha y Ref.</th><th>Cuentas Patrimoniales</th><th style="text-align:right;">Debe</th><th style="text-align:right;">Haber</th></tr></thead>
+        <div class="info-tooltip mb-1">Nomenclatura patrimonial: <strong>(+A/-A)</strong> Activos, <strong>(+P/-P)</strong> Pasivos, <strong>(+PN/-PN)</strong> Patrimonio Neto, <strong>(+R+/-R-)</strong> Resultados.</div>
+        <table><thead><tr><th>Fecha y Ref.</th><th>Cuentas Patrimoniales</th><th class="text-right">Debe</th><th class="text-right">Haber</th></tr></thead>
         <tbody id="tabla-diario"></tbody></table>
       </div>
     </div>
 
-    <div id="inf-vencimientos" class="inf-tab" style="display:none;">
+    <div id="inf-vencimientos" class="inf-tab">
       <div class="card">
         <div class="card-title">Reporte de Vencimientos</div>
-        <div style="display:flex; gap:.5rem; align-items:flex-end; margin-bottom:1rem; flex-wrap:wrap;">
+        <div class="d-flex align-end flex-wrap gap-sm mb-1">
            <div class="form-group">
               <label>Mostrar productos que vencen en los próximos:</label>
-              <div style="display:flex;align-items:center;gap:.5rem;">
+              <div class="d-flex align-center gap-sm">
                  <input type="number" id="venc-dias" value="30" step="1" min="1" style="width:80px;">
                  <span>días.</span>
               </div>
@@ -494,7 +483,7 @@
         </div>
         <table>
           <thead><tr><th>Producto</th><th>Proveedor Reciente</th><th>Lote (Fecha Venc.)</th><th>Stock del Lote</th><th>Días Restantes</th></tr></thead>
-          <tbody id="tabla-inf-vencimientos"><tr><td colspan="5" style="text-align:center;">Hacé clic en Generar Alerta para analizar el inventario.</td></tr></tbody>
+          <tbody id="tabla-inf-vencimientos"><tr><td colspan="5" class="text-center">Hacé clic en Generar Alerta para analizar el inventario.</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -503,7 +492,7 @@
 
 <section class="section" id="sec-config">
   <div class="card">
-    <div class="config-title">🏪 Datos del negocio</div>
+    <div class="card-title" style="border:none;">🏪 Datos del negocio</div>
     <div class="form-grid">
       <div class="form-group"><label>Nombre de fantasía</label><input type="text" id="cfg-nombre"></div>
       <div class="form-group"><label>Dirección</label><input type="text" id="cfg-direccion"></div>
@@ -512,33 +501,47 @@
       <div class="form-group"><label>Instagram</label><input type="text" id="cfg-ig" placeholder="@usuario"></div>
       <div class="form-group"><label>Facebook</label><input type="text" id="cfg-fb" placeholder="/pagina"></div>
     </div>
-    <div class="form-group" style="margin-top:.85rem;max-width:280px;">
+    <div class="form-group mt-1" style="max-width:280px;">
       <label>Logo del negocio (Transparente)</label>
       <input type="file" id="cfg-logo-file" accept="image/*" onchange="cargarLogo(event)">
-      <div id="cfg-logo-preview" style="margin-top:.5rem;"></div>
+      <div id="cfg-logo-preview" class="mt-1"></div>
     </div>
     
-    <div class="config-title" style="margin-top:1.5rem;">🎨 Colores del programa (HEX)</div>
-    <div class="form-grid" style="max-width:400px;">
-      <div class="form-group"><label>Color Principal (Botones)</label><input type="color" id="cfg-c1" style="height:40px;padding:2px;"></div>
-      <div class="form-group"><label>Color Cabecera</label><input type="color" id="cfg-c2" style="height:40px;padding:2px;"></div>
-    </div>
+    <div class="config-title" style="margin-top:1.5rem;">🎨 Personalización de Colores</div>
+<div class="form-grid" style="max-width:800px;">
+    <div class="form-group"><label>Fondo General (Pantalla)</label><input type="color" id="cfg-bg" style="height:40px;padding:2px;"></div>
+    <div class="form-group"><label>Fondo de Tarjetas (Paneles)</label><input type="color" id="cfg-surface" style="height:40px;padding:2px;"></div>
+    <div class="form-group"><label>Fondo de Cabecera</label><input type="color" id="cfg-c2" style="height:40px;padding:2px;"></div>
+    
+    <div class="form-group"><label>Texto Principal</label><input type="color" id="cfg-text" style="height:40px;padding:2px;"></div>
+    <div class="form-group"><label>Texto Secundario</label><input type="color" id="cfg-muted" style="height:40px;padding:2px;"></div>
+    <div class="form-group"><label>Texto Cabecera y Menú</label><input type="color" id="cfg-h-text" style="height:40px;padding:2px;"></div>
+    
+    <div class="form-group"><label>Color Principal (Botones/Menú)</label><input type="color" id="cfg-c1" style="height:40px;padding:2px;"></div>
+    <div class="form-group"><label>Texto de Botones Principales</label><input type="color" id="cfg-btn-text" style="height:40px;padding:2px;"></div>
+    <div class="form-group"><label>Acción Positiva (Cobrar/Guardar)</label><input type="color" id="cfg-success" style="height:40px;padding:2px;"></div>
+    <div class="form-group"><label>Énfasis y Alertas (Borrar/Avisos)</label><input type="color" id="cfg-alert" style="height:40px;padding:2px;"></div>
+</div>
+<div style="margin-top: 1rem;">
+    <button class="btn btn-secondary" onclick="window.restaurarColoresPorDefecto()">Restaurar Colores Originales</button>
+</div>
 
-<div class="config-title" style="margin-top:1.5rem;">📁 Almacenamiento (Base de Datos)</div>
-    <div style="display:flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
-      <button class="btn btn-blue" onclick="elegirCarpetaGuardado()">Seleccionar carpeta</button>
-      <div id="ruta-guardado" style="font-family:'DM Mono',monospace; font-size:.8rem; color:var(--muted);">Guardando en memoria temporal (Navegador)</div>
+    <div class="card-title mt-2" style="border:none;">📁 Almacenamiento (Base de Datos)</div>
+    <div class="d-flex align-center gap-md mb-1">
+      <button class="btn btn-secondary" onclick="elegirCarpetaGuardado()">📂 Seleccionar carpeta</button>
+      <div id="ruta-guardado" class="mono text-muted" style="font-size:.8rem;">Guardando en memoria temporal (Navegador)</div>
     </div>
     
-    <div style="margin-top:1.5rem;"><button class="btn btn-primary" onclick="guardarConfig()">💾 Guardar configuración</button></div>
-    <div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border);">
-      <button class="btn btn-green" onclick="exportarDatos()">Exportar copia (JSON)</button>
+    <div class="mt-2"><button class="btn btn-primary" onclick="guardarConfig()">💾 Guardar configuración</button></div>
+    
+    <div class="dashed-divider">
+      <button class="btn btn-primary" onclick="exportarDatos()">⬇️ Exportar copia (JSON)</button>
       <input type="file" id="import-file" accept=".json" onchange="importarDatos(event)" style="display:none;">
       <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">Importar copia (JSON)</button>
     </div>
-    <div style="margin-top:1rem;padding-top:1rem;border-top:1px dashed var(--accent);">
-      
-    </div><button class="btn btn-danger" onclick="if(confirm('¿Borrar TODO el sistema? Esta acción es irreversible.')){localStorage.clear();location.reload();}">⚠ Borrar todos los datos (Reset)</button>
+    <div class="dashed-divider">
+      <button class="btn btn-danger" onclick="if(confirm('¿Borrar TODO el sistema? Esta acción es irreversible.')){localStorage.clear();location.reload();}">⚠ Borrar todos los datos (Reset)</button>
+    </div>
   </div>
 </section>
 
@@ -547,7 +550,7 @@
 <div class="modal-overlay" id="modal-qty">
   <div class="modal">
     <h2 id="modal-qty-title">Agregar</h2>
-    <div class="form-group" style="margin-bottom:.85rem;">
+    <div class="form-group mb-1">
       <label id="modal-qty-label">Cantidad</label>
       <input type="number" id="modal-qty-input" step="0.001" min="0.001" onkeydown="if(event.key==='Enter'){event.preventDefault(); event.stopPropagation(); confirmarAgregarCarrito();}">
     </div>
@@ -562,15 +565,15 @@
 <div class="modal-overlay" id="modal-promo">
   <div class="modal" style="max-width: 600px;">
     <h2>⭐ Armar Promoción / Combo</h2>
-    <div class="info-tooltip">Agregá los productos que componen el combo. El sistema calculará el costo base y te permitirá aplicar un porcentaje de descuento para definir el Precio Promo final.</div>
-    <div class="form-grid" style="margin-top:1rem;">
-      <div class="form-group"><label>Nombre de la Promoción *</label><input type="text" id="promo-nombre" placeholder="Ej: Combo Desayuno (Café + Medialunas)"></div>
+    <div class="info-tooltip">Agregá los productos que componen el combo. El sistema calculará el costo base y te permitirá aplicar un porcentaje de descuento.</div>
+    <div class="form-grid mt-1">
+      <div class="form-group"><label>Nombre de la Promoción *</label><input type="text" id="promo-nombre" placeholder="Ej: Combo Desayuno"></div>
       <div class="form-group"><label>Descuento a aplicar (%) *</label><input type="number" id="promo-desc" step="1" min="0" max="100" value="15" oninput="window.calcularTotalesPromo()"></div>
     </div>
-    <div style="margin-top:1rem; padding:1rem; background:var(--surface2); border-radius:8px; border: 1px solid var(--border);">
+    <div class="mt-1 p-1 bg-surface2" style="border: 1px solid var(--border);">
       <h4 style="margin-top:0; margin-bottom:.5rem;">Productos incluidos en el combo</h4>
-      <div style="display:flex; gap:5px; margin-bottom:10px;">
-        <select id="promo-add-prod" style="flex:1;"></select>
+      <div class="d-flex gap-sm mb-1">
+        <select id="promo-add-prod" class="flex-1"></select>
         <input type="number" id="promo-add-qty" value="1" min="1" step="0.001" style="width:80px;" placeholder="Cant.">
         <button class="btn btn-secondary" onclick="window.agregarProductoPromo()">Añadir</button>
       </div>
@@ -579,17 +582,17 @@
         <tbody id="tabla-promo-items"></tbody>
       </table>
     </div>
-    <div style="margin-top:1.5rem; display:flex; justify-content:space-between; align-items:flex-end; border-top: 1px dashed var(--border); padding-top: 1rem;">
+    <div class="dashed-divider d-flex justify-between align-end">
         <div style="font-size:0.85rem; color:var(--muted); line-height: 1.5;">
             Costo Neto de Mercadería: <strong id="promo-costo" class="mono">$0.00</strong><br>
             Suma Precio Venta Individual: <strong id="promo-normal" class="mono" style="text-decoration:line-through;">$0.00</strong>
         </div>
-        <div style="text-align: right;">
-            <div style="font-size:0.75rem; font-weight:bold; color:var(--accent); text-transform:uppercase; margin-bottom:3px;">Precio del Combo final al cliente</div>
-            <div id="promo-final" class="mono" style="font-size:1.8rem; font-weight:900; color:var(--green); line-height:1;">$0.00</div>
+        <div class="text-right">
+            <div class="caps-label text-accent" style="margin-bottom:3px;">Precio del Combo final al cliente</div>
+            <div id="promo-final" class="mono text-green" style="font-size:1.8rem; font-weight:900; line-height:1;">$0.00</div>
         </div>
     </div>
-    <div class="modal-actions" style="margin-top:1.5rem;">
+    <div class="modal-actions mt-2">
       <button class="btn btn-secondary" onclick="document.getElementById('modal-promo').classList.remove('open')">Cancelar</button>
       <button class="btn btn-primary" onclick="window.guardarPromoManual()">Guardar Promoción</button>
     </div>
@@ -611,7 +614,7 @@
     <div class="form-grid">
       <div class="form-group">
         <label>Código interno / Barras *</label>
-        <div style="display:flex;gap:5px;">
+        <div class="d-flex gap-sm">
             <input type="text" id="np-codigo">
             <button class="btn btn-secondary" onclick="document.getElementById('np-codigo').value = compras.generarCodigoInterno()" title="Generar código interno automático">⚙️</button>
         </div>
@@ -676,13 +679,13 @@
       <div class="form-group"><label>Socio que retira *</label><select id="rs-socio"></select></div>
       <div class="form-group"><label>Asignación Contable *</label>
         <select id="rs-accion">
-          <option value="descontar">Descontar del Saldo del Socio (Retiro)</option>
+          <option value="descontar">Descontar del Saldo del Socio</option>
           <option value="perdida">Pérdida/Gasto General del Negocio</option>
         </select>
       </div>
     </div>
-    <div class="info-tooltip">Calcula el Costo (CMV) PEPS y se resta del saldo personal del socio (si se elige descontar).</div>
-    <div class="modal-actions"><button class="btn btn-secondary" onclick="document.getElementById('modal-retiro-socio').classList.remove('open')">Cancelar</button><button class="btn btn-blue" onclick="confirmarRetiroSocio()">Registrar Salida</button></div>
+    <div class="info-tooltip">Calcula el Costo (CMV) PEPS y se resta del saldo personal del socio.</div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="document.getElementById('modal-retiro-socio').classList.remove('open')">Cancelar</button><button class="btn btn-success" onclick="confirmarRetiroSocio()">Registrar Salida</button></div>
   </div>
 </div>
 
@@ -694,22 +697,22 @@
       <div class="form-group"><label>Cantidad *</label><input type="number" id="mu-qty" step="0.001" min="0"></div>
       <div class="form-group"><label>Fecha *</label><input type="date" id="mu-fecha"></div>
     </div>
-    <div class="info-tooltip">Esta mercadería se descontará del stock (PEPS) y se imputará automáticamente como un gasto de "Publicidad / Muestras".</div>
-    <div class="modal-actions"><button class="btn btn-secondary" onclick="document.getElementById('modal-muestras').classList.remove('open')">Cancelar</button><button class="btn btn-purple" onclick="confirmarMuestra()">Registrar Gasto</button></div>
+    <div class="info-tooltip">Esta mercadería se descontará del stock y se imputará automáticamente como "Publicidad / Muestras".</div>
+    <div class="modal-actions"><button class="btn btn-secondary" onclick="document.getElementById('modal-muestras').classList.remove('open')">Cancelar</button><button class="btn btn-success" onclick="confirmarMuestra()">Registrar Gasto</button></div>
   </div>
 </div>
 
 <div class="modal-overlay" id="modal-precios">
   <div class="modal" style="max-width:600px;">
     <h2>⚠️ Precios Desactualizados en Góndola</h2>
-    <div class="info-tooltip">Listado de productos con stock cuyo precio calculado actual difiere del último marcado. Actualizá la etiqueta en el local y marcá "Listo".</div>
+    <div class="info-tooltip">Listado de productos con stock cuyo precio calculado actual difiere del último marcado.</div>
     <div style="max-height:300px; overflow-y:auto;">
       <table style="margin-bottom:0;">
         <thead><tr><th>Producto</th><th>Precio Anterior</th><th>Nuevo Sugerido</th><th>Acción</th></tr></thead>
         <tbody id="tabla-precios-desact"></tbody>
       </table>
     </div>
-    <div class="modal-actions" style="margin-top:15px;">
+    <div class="modal-actions mt-1">
         <button class="btn btn-secondary" onclick="document.getElementById('modal-precios').classList.remove('open')">Cerrar</button>
         <button class="btn btn-primary" onclick="generarPDFEtiquetas()">Imprimir Códigos (PDF)</button>
     </div>
@@ -745,7 +748,7 @@
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="document.getElementById('modal-cobro-cliente').classList.remove('open')">Cancelar</button>
-      <button class="btn btn-green" onclick="confirmarCobroCliente()">Registrar Cobro</button>
+      <button class="btn btn-success" onclick="confirmarCobroCliente()">➕Registrar Cobro</button>
     </div>
   </div>
 </div>
@@ -753,20 +756,15 @@
 <div class="modal-overlay" id="modal-historial-cliente">
   <div class="modal" style="max-width: 600px;">
     <h2>Historial: <span id="historial-cli-nombre"></span></h2>
-    <div style="max-height: 400px; overflow-y: auto; margin-top: 1rem;">
+    <div class="mt-1" style="max-height: 400px; overflow-y: auto;">
       <table style="margin-bottom: 0;">
         <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Descripción</th>
-            <th style="text-align:right;">Cargos ($)</th>
-            <th style="text-align:right;">Pagos ($)</th>
-          </tr>
+          <tr><th>Fecha</th><th>Descripción</th><th class="text-right">Cargos ($)</th><th class="text-right">Pagos ($)</th></tr>
         </thead>
         <tbody id="tabla-historial-cliente"></tbody>
       </table>
     </div>
-    <div class="modal-actions" style="margin-top: 15px;">
+    <div class="modal-actions mt-1">
       <button class="btn btn-secondary" onclick="document.getElementById('modal-historial-cliente').classList.remove('open')">Cerrar</button>
     </div>
   </div>
@@ -774,32 +772,32 @@
 
 <div class="modal-overlay" id="modal-venta-historica">
   <div class="modal" style="max-width: 500px;">
-    <h2>⏳ Cargar Ingreso Histórico (Contingencia)</h2>
-    <div class="info-tooltip">Registrá el dinero total ingresado durante un corte de luz o caída de sistema. El ajuste de stock y cálculo de costos (CMV) se debe realizar luego mediante la herramienta de Auditoría.</div>
+    <h2>⏳ Cargar Ingreso Histórico</h2>
+    <div class="info-tooltip">Registrá el dinero total ingresado durante un corte de luz. El ajuste de stock y cálculo de costos se debe realizar luego mediante Auditoría.</div>
 
-    <div class="form-grid" style="margin-top:1rem;">
+    <div class="form-grid mt-1">
       <div class="form-group"><label>Fecha Exacta *</label><input type="date" id="vh-fecha"></div>
       <div class="form-group"><label>Hora Exacta *</label><input type="time" id="vh-hora"></div>
-      <div class="form-group"><label>Monto Total Cobrado ($) *</label><input type="number" id="vh-monto" step="0.01" min="0.01"></div>
+      <div class="form-group"><label>Monto Total ($) *</label><input type="number" id="vh-monto" step="0.01" min="0.01"></div>
       <div class="form-group"><label>Cobrado en Cuenta *</label><select id="vh-cuenta"></select></div>
-      <div class="form-group"><label>Descripción / Detalle</label><input type="text" id="vh-desc" placeholder="Ej: Ventas turno mañana sin luz"></div>
+      <div class="form-group"><label>Descripción</label><input type="text" id="vh-desc" placeholder="Ej: Ventas turno mañana sin luz"></div>
     </div>
 
-    <div class="modal-actions" style="margin-top:1.5rem;">
+    <div class="modal-actions mt-2">
       <button class="btn btn-secondary" onclick="window.cerrarModalVentaHistorica()">Cancelar</button>
       <button class="btn btn-primary" onclick="window.confirmarVentaHistorica()">Registrar Ingreso</button>
     </div>
   </div>
 </div>
-</div>
+
 <div class="modal-overlay" id="modal-auditoria">
   <div class="modal" style="max-width: 800px;">
     <h2>⚖️ Auditoría y Ajuste Físico de Inventario</h2>
-    <div class="info-tooltip">Buscá o escaneá productos, contá cuántos hay en la góndola y anotá el Stock Real. Las diferencias negativas se registrarán automáticamente como pérdidas (CMV) en Gastos.</div>
+    <div class="info-tooltip">Contá cuántos hay en la góndola y anotá el Stock Real. Las diferencias negativas se registrarán automáticamente como pérdidas en Gastos.</div>
 
-    <div style="display:flex; gap:10px; margin-top:1rem; margin-bottom:1rem; align-items: center;">
-      <input type="text" id="aud-search" placeholder="🔍 Buscar producto o escanear código de barras..." oninput="window.filtrarAuditoria()" style="flex:1; min-width: 0;">
-      <select id="aud-filtro" onchange="window.filtrarAuditoria()" style="width: 250px; flex-shrink: 0;">
+    <div class="d-flex align-center gap-sm mt-1 mb-1">
+      <input type="text" id="aud-search" placeholder="🔍 Buscar producto o escanear..." oninput="window.filtrarAuditoria()" class="flex-1">
+      <select id="aud-filtro" onchange="window.filtrarAuditoria()" style="width: 250px;">
         <option value="todos">Todos</option>
         <option value="diferencia">Solo con diferencias</option>
       </select>
@@ -809,19 +807,14 @@
       <table style="margin: 0;">
         <thead style="position: sticky; top: 0; background: var(--surface); z-index: 1;">
           <tr>
-            <th>Código</th>
-            <th>Producto</th>
-            <th style="text-align:center;">Stock Sistema</th>
-            <th style="text-align:center; width: 130px;">Stock Real</th>
-            <th style="text-align:center;">Diferencia</th>
+            <th>Código</th><th>Producto</th><th class="text-center">Stock Sistema</th><th class="text-center" style="width:130px;">Stock Real</th><th class="text-center">Diferencia</th>
           </tr>
         </thead>
-        <tbody id="tabla-auditoria-items">
-          </tbody>
+        <tbody id="tabla-auditoria-items"></tbody>
       </table>
     </div>
 
-    <div class="modal-actions" style="margin-top:1.5rem;">
+    <div class="modal-actions mt-2">
       <button class="btn btn-secondary" onclick="window.cerrarModalAuditoria()">Cerrar / Cancelar</button>
       <button class="btn btn-primary" onclick="window.confirmarAuditoria()">Aplicar Ajustes Físicos</button>
     </div>

@@ -71,8 +71,8 @@ window.renderTablaProductos = function() {
                 <td style="text-align:center;"><input type="checkbox" data-f="alCosto" ${ex.alCosto ? 'checked' : ''} onchange="window.recalcInline(this)"></td>
                 <td class="mono" id="pf-${p.id}"><strong>${fmt(inventario.calcPrecioFinal(p.id))}</strong></td>
                 <td style="white-space:nowrap;">
-                    <button class="btn btn-secondary btn-sm" onclick="window.abrirEditarProd('${p.id}')">✏</button> 
-                    <button class="btn btn-danger btn-sm" onclick="if(confirm('¿Eliminar?')){store.db.productos.find(x=>x.id==='${p.id}').deleted=true;store.saveDB();window.renderTablaProductos();if(typeof window.renderProductGrid === 'function') window.renderProductGrid();}">✕</button>
+                    <button class="btn btn-secondary btn-sm" onclick="window.abrirEditarProd('${p.id}')">✏️ Modificar</button> 
+                    <button class="btn btn-danger btn-sm" onclick="if(confirm('¿Eliminar?')){store.db.productos.find(x=>x.id==='${p.id}').deleted=true;store.saveDB();window.renderTablaProductos();if(typeof window.renderProductGrid === 'function') window.renderProductGrid();}">🗑️</button>
                 </td>
             `;
         } else {
@@ -145,7 +145,7 @@ window.confirmarMuestra = function() {
 
 window.abrirModalPreciosDesactualizados = function() {
     arrayPreciosDesact = inventario.getPreciosDesactualizados();
-    document.getElementById('tabla-precios-desact').innerHTML = arrayPreciosDesact.map(p => `<tr><td>${p.nombre}</td><td class="mono" style="color:var(--muted)">${fmt(p.impreso)}</td><td class="mono" style="color:var(--accent);font-weight:bold;">${fmt(p.calculado)}</td><td><button class="btn btn-sm btn-green" onclick="window.marcarPrecioListo('${p.id}')">Listo ✓</button></td></tr>`).join('');
+    document.getElementById('tabla-precios-desact').innerHTML = arrayPreciosDesact.map(p => `<tr><td>${p.nombre}</td><td class="mono" style="color:var(--muted)">${fmt(p.impreso)}</td><td class="mono" style="color:var(--accent);font-weight:bold;">${fmt(p.calculado)}</td><td><button class="btn btn-sm btn-success" onclick="window.marcarPrecioListo('${p.id}')">✅ Listo</button></td></tr>`).join('');
     if(arrayPreciosDesact.length === 0) document.getElementById('tabla-precios-desact').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;">Todos los precios en góndola coinciden con el sistema.</td></tr>';
     document.getElementById('modal-precios').classList.add('open');
 };

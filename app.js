@@ -9,6 +9,7 @@ require('./ui_finanzas.js');
 require('./ui_clientes.js');
 require('./ui_ventas_historicas.js');
 require('./ui_auditoria.js');
+require('./ui_config.js');
 
 // Utilidades locales: Corrección de Zona Horaria (Timezone Offset)
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -91,67 +92,6 @@ window.populateSelects = function() {
     
     document.getElementById('medios-pago-btns').innerHTML = ctasActivas.map(c => `<button class="medio-btn${c.id === store.medioSeleccionado ? ' selected' : ''}" onclick="window.selectMedio('${c.id}',this)">${c.nombre}</button>`).join('');
     document.getElementById('vent-filtro-medio').innerHTML = '<option value="">Todas</option>' + ctasActivas.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
-};
-
-window.cargarConfig = function() {
-    const c = store.db.config;
-    ['nombre','direccion','tel','email','ig','fb','descEfectivo','colorAccent','colorInk'].forEach(k => {
-        const el = document.getElementById('cfg-'+k.replace(/([A-Z])/g, "-$1").toLowerCase());
-        if(el) el.value = c[k] || '';
-    });
-    if (c.logo) document.getElementById('cfg-logo-preview').innerHTML = `<img src="${c.logo}" style="max-height:60px;">`;
-    if (store.dbFilePath) document.getElementById('ruta-guardado').textContent = store.dbFilePath;
-};
-
-window.guardarConfig = function() {
-    ['nombre','direccion','tel','email','ig','fb','colorAccent','colorInk'].forEach(k => store.db.config[k] = document.getElementById('cfg-'+k.replace(/([A-Z])/g, "-$1").toLowerCase()).value);
-    store.saveDB();
-    window.aplicarBranding();
-    window.showToast('Guardado');
-};
-
-window.guardarDescEfectivo = function() {
-    store.db.config.descEfectivo = parseFloat(document.getElementById('cfg-desc-efectivo').value) || 0;
-    store.saveDB();
-    window.showToast('Regla guardada');
-    if(typeof window.renderCarrito === 'function') window.renderCarrito();
-};
-
-window.cargarLogo = function(e) {
-    const r = new FileReader();
-    r.onload = ev => {
-        store.db.config.logo = ev.target.result;
-        window.cargarConfig();
-        window.aplicarBranding();
-    };
-    r.readAsDataURL(e.target.files[0]);
-};
-
-window.aplicarBranding = function() {
-    const c = store.db.config;
-    document.documentElement.style.setProperty('--c1', c.colorAccent || '#C4432A');
-    document.documentElement.style.setProperty('--c2', c.colorInk || '#1A1612');
-    const h = document.getElementById('header-logo');
-    if (c.logo) { h.src = c.logo; h.classList.add('visible'); }
-    else { h.classList.remove('visible'); }
-    document.getElementById('header-title').innerHTML = c.nombre ? `<span style="color:var(--c1)">${c.nombre}</span>` : `Libre<span>POS</span>`;
-};
-
-window.exportarDatos = function() {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(store.db)], { type: 'application/json' }));
-    a.download = 'LibrePOS-' + today() + '.json';
-    a.click();
-};
-
-window.importarDatos = function(e) {
-    const r = new FileReader();
-    r.onload = ev => {
-        Object.assign(store.db, JSON.parse(ev.target.result));
-        store.saveDB();
-        location.reload();
-    };
-    r.readAsText(e.target.files[0]);
 };
 
 // INIT GLOBAL

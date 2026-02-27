@@ -82,7 +82,7 @@ window.renderTablaRemito = function() {
     let total = 0;
     document.getElementById('tabla-remito-items').innerHTML = carritoRemito.map((item, i) => {
         const sub = item.cantidad * item.costoUnitario; total += sub;
-        return `<tr><td class="mono">${item.codigo}</td><td>${item.nombre}</td><td class="mono">${item.cantidad}</td><td class="mono">${fmt(item.costoUnitario)}</td><td class="mono">${fmt(sub)}</td><td>${fmtFecha(item.vencimiento)}</td><td><button class="btn btn-danger btn-sm" onclick="quitarItemRemito(${i})">✕</button></td></tr>`;
+        return `<tr><td class="mono">${item.codigo}</td><td>${item.nombre}</td><td class="mono">${item.cantidad}</td><td class="mono">${fmt(item.costoUnitario)}</td><td class="mono">${fmt(sub)}</td><td>${fmtFecha(item.vencimiento)}</td><td><button class="btn btn-danger btn-sm" onclick="quitarItemRemito(${i})">🗑️</button></td></tr>`;
     }).join('');
     document.getElementById('comp-total-remito').textContent = fmt(total);
 };

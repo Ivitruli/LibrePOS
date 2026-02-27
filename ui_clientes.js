@@ -149,10 +149,10 @@ window.renderTablaClientes = function() {
                         </td>
                         <td>
                             <div style="display:flex; gap:5px;">
-                                <button class="btn btn-sm btn-green" onclick="window.abrirCobroCliente('${c.id}')" ${deuda <= 0 ? 'disabled' : ''}>Cobrar</button>
-                                <button class="btn btn-sm btn-secondary" onclick="window.verHistorialCliente('${c.id}')">Historial</button>
-                                <button class="btn btn-sm btn-secondary" onclick="window.abrirEditarCliente('${c.id}')">✏️</button>
-                                <button class="btn btn-sm btn-danger" onclick="window.eliminarCliente('${c.id}')">✕</button>
+                                <button class="btn btn-sm btn-success" onclick="window.abrirCobroCliente('${c.id}')" ${deuda <= 0 ? 'disabled' : ''}>✅ Cobrar</button>
+                                <button class="btn btn-sm btn-secondary" onclick="window.verHistorialCliente('${c.id}')">📄 Historial</button>
+                                <button class="btn btn-sm btn-secondary" onclick="window.abrirEditarCliente('${c.id}')">✏️ Modificar</button>
+                                <button class="btn btn-sm btn-danger" onclick="window.eliminarCliente('${c.id}')">🗑️</button>
                             </div>
                         </td>
                     </tr>

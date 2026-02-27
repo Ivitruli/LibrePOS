@@ -1,15 +1,23 @@
 {
   "name": "librepos",
   "version": "1.0.0",
-  "description": "Punto de Venta y Gestión",
+  "description": "Sistema de Gestion LibrePOS",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-builder --win"
   },
+  "build": {
+    "appId": "com.ivi.librepos",
+    "productName": "LibrePOS",
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "author": "Ivi",
+  "license": "ISC",
   "devDependencies": {
-    "electron": "^40.6.0"
-  },
-  "dependencies": {
-    "jsbarcode": "^3.12.3"
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
   }
 }

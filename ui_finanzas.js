@@ -154,7 +154,17 @@ window.abrirEditarProv = function(id) { const p = store.db.proveedores.find(x =>
 window.guardarEditProv = function() { try { proveedores.editar(document.getElementById('eprov-id').value, document.getElementById('eprov-nombre').value, document.getElementById('eprov-contacto').value, document.getElementById('eprov-tel').value, Array.from(document.getElementById('eprov-dias-pedido').selectedOptions).map(o=>o.value), Array.from(document.getElementById('eprov-dias-entrega').selectedOptions).map(o=>o.value)); store.saveDB(); document.getElementById('modal-edit-prov').classList.remove('open'); window.renderTablaProveedores(); window.showToast('Proveedor actualizado'); } catch(e) { window.showToast(e.message, 'error'); } };
 window.eliminarProveedor = function(id) { try { if(confirm('¿Eliminar proveedor? Historial de compras se mantendrá.')) { proveedores.eliminar(id); store.saveDB(); window.renderTablaProveedores(); if(typeof window.populateSelects === 'function') window.populateSelects(); window.showToast('Proveedor eliminado'); } } catch(e) { window.showToast(e.message, 'error'); } };
 window.registrarDeuda = function() { try { proveedores.registrarDeuda(document.getElementById('deuda-prov').value, document.getElementById('deuda-fecha').value, document.getElementById('deuda-monto').value, document.getElementById('deuda-desc').value); store.saveDB(); window.renderTablaDeudas(); window.showToast('Deuda registrada'); } catch(e) { window.showToast(e.message, 'error'); } };
-window.abrirPagoDeuda = function(id) { document.getElementById('pd-id').value = id; document.getElementById('pd-monto').value = '0'; document.getElementById('pd-descuento').value = '0'; document.getElementById('modal-pago-deuda').classList.add('open'); };
+window.abrirPagoDeuda = function(id) { 
+    const d = store.db.cuentasPorPagar.find(x => x.id === id);
+    if (!d) return;
+    const pagado = d.pagos.reduce((s, p) => s + p.monto, 0);
+    const restante = parseFloat((d.monto - pagado).toFixed(2));
+    
+    document.getElementById('pd-id').value = id; 
+    document.getElementById('pd-monto').value = restante > 0 ? restante : '0'; 
+    document.getElementById('pd-descuento').value = '0'; 
+    document.getElementById('modal-pago-deuda').classList.add('open'); 
+};
 window.confirmarPagoDeuda = function() { try { proveedores.registrarPagoDeuda(document.getElementById('pd-id').value, document.getElementById('pd-monto').value, document.getElementById('pd-descuento').value, document.getElementById('pd-cuenta').value, today()); store.saveDB(); document.getElementById('modal-pago-deuda').classList.remove('open'); window.renderTablaDeudas(); window.renderFinanzasTotales(); window.showToast('Pago registrado'); } catch(e) { window.showToast(e.message, 'error'); } };
 
 window.renderTablaProveedores = function() { document.getElementById('tabla-proveedores-container').innerHTML = store.db.proveedores.filter(p=>!p.deleted).map(p => `<div class="card"><div style="display:flex;justify-content:space-between;align-items:start;"><div class="card-title" style="margin-bottom:0;border:none;">${p.nombre}</div><div><button class="btn btn-secondary btn-sm" onclick="window.abrirEditarProv('${p.id}')">✏️ Modificar</button> <button class="btn btn-danger btn-sm" onclick="window.eliminarProveedor('${p.id}')">🗑️</button></div></div><div style="font-size:.8rem;color:var(--muted)">📞 ${p.tel || '—'} | Pedido: ${(p.diasPedido || []).map(d => DIAS_SEMANA[d]).join(', ')} | Entrega: ${(p.diasEntrega || []).map(d => DIAS_SEMANA[d]).join(', ')}</div></div>`).join(''); };
@@ -219,10 +229,25 @@ window.renderFinanzasTotales = function() { document.getElementById('fin-capital
 window.renderCashflow = function() {
     const ctx = document.getElementById('chart-cashflow'); if (!ctx) return; 
     if (chartCashflow) chartCashflow.destroy();
+    
     const days = Array.from({ length: 30 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - 29 + i); return d.toISOString().slice(0, 10); });
+    
     const ing = days.map(d => store.db.ventas.filter(v => v.fecha === d).reduce((s, v) => s + v.totalVenta, 0) + store.db.movimientos.filter(m => m.fecha === d && m.tipo === 'deposito').reduce((s, m) => s + m.importe, 0) + store.db.ajustesCaja.filter(a => a.fecha === d && a.tipo === 'ingreso').reduce((s, a) => s + a.diferencia, 0));
-    const egr = days.map(d => store.db.gastos.filter(g => g.fecha === d).reduce((s, g) => s + g.importe, 0) + store.db.cuentasPorPagar.reduce((s, deuda) => s + (deuda.pagos || []).filter(p => p.fecha === d && p.tipo==='pago').reduce((x, p) => x + p.monto, 0), 0) + store.db.lotes.filter(l => l.fecha === d && l.cuentaId).reduce((s, l) => s + (l.cantOriginal * l.costoUnit), 0) + store.db.movimientos.filter(m => m.fecha === d && m.tipo === 'retiro').reduce((s, m) => s + m.importe, 0) + store.db.ajustesCaja.filter(a => a.fecha === d && a.tipo === 'perdida').reduce((s, a) => s + Math.abs(a.diferencia), 0));
-    chartCashflow = new Chart(ctx, { type: 'bar', data: { labels: days.map(d => d.slice(8, 10) + '/' + d.slice(5, 7)), datasets: [{ label: 'Ingresos Reales (Caja)', data: ing, backgroundColor: 'rgba(42,107,60,.8)' }, { label: 'Egresos Reales (Pagos)', data: egr, backgroundColor: 'rgba(196,67,42,.8)' }] }, options: { responsive: true, maintainAspectRatio: false } });
+    
+    // CORRECCIÓN: Egresos calculados sin la extracción de lotes
+    const egr = days.map(d => store.db.gastos.filter(g => g.fecha === d).reduce((s, g) => s + g.importe, 0) + store.db.cuentasPorPagar.reduce((s, deuda) => s + (deuda.pagos || []).filter(p => p.fecha === d && p.tipo==='pago').reduce((x, p) => x + p.monto, 0), 0) + store.db.movimientos.filter(m => m.fecha === d && m.tipo === 'retiro').reduce((s, m) => s + m.importe, 0) + store.db.ajustesCaja.filter(a => a.fecha === d && a.tipo === 'perdida').reduce((s, a) => s + Math.abs(a.diferencia), 0));
+    
+    chartCashflow = new Chart(ctx, { 
+        type: 'bar', 
+        data: { 
+            labels: days.map(d => d.slice(8, 10) + '/' + d.slice(5, 7)), 
+            datasets: [
+                { label: 'Ingresos Reales (Caja)', data: ing, backgroundColor: 'rgba(42,107,60,.8)' }, 
+                { label: 'Egresos Reales (Pagos)', data: egr, backgroundColor: 'rgba(196,67,42,.8)' }
+            ] 
+        }, 
+        options: { responsive: true, maintainAspectRatio: false } 
+    });
 };
 
 // ================= SOCIOS =================

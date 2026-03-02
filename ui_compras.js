@@ -17,27 +17,59 @@ window.togglePagoCompra = function(val) {
 window.buscarProdCompra = function() {
     const bc = document.getElementById('comp-barcode').value.trim();
     if (!bc) return;
-    const prod = store.db.productos.filter(x => !x.deleted).find(p => p.barcode === bc || p.codigo === bc);
-    if (prod) {
-        document.getElementById('comp-prod-nombre').value = prod.nombre + (prod.marca ? ' (' + prod.marca + ')' : '');
-        document.getElementById('comp-prod-id').value = prod.id;
-        document.getElementById('comp-cantidad').focus();
-    } else {
+    
+    // 1. Búsqueda exacta por código
+    const prodByCode = store.db.productos.filter(x => !x.deleted).find(p => p.barcode === bc || p.codigo === bc);
+    if (prodByCode) {
+        _seleccionarProd(prodByCode);
+        return;
+    }
+
+    // 2. Búsqueda parcial por nombre
+    const prodsByName = store.db.productos.filter(x => !x.deleted && x.nombre.toLowerCase().includes(bc.toLowerCase()));
+    if (prodsByName.length === 1) {
+        _seleccionarProd(prodsByName[0]);
+        return;
+    } else if (prodsByName.length > 1) {
+        return window.showToast('Se encontraron múltiples productos. Sea más específico.', 'error');
+    }
+
+    // 3. Resolución: Código nuevo vs. Nombre inexistente
+    // Regla estricta: Los códigos no deben contener espacios.
+    const esCodigo = !bc.includes(' ');
+    
+    if (esCodigo) {
         document.getElementById('np-codigo').value = bc;
         document.getElementById('modal-np').classList.add('open');
         setTimeout(() => document.getElementById('np-nombre').focus(), 80);
+    } else {
+        window.showToast('Producto no encontrado.', 'error');
     }
 };
 
+// Función auxiliar de asignación en la interfaz
+function _seleccionarProd(prod) {
+    document.getElementById('comp-prod-nombre').value = prod.nombre + (prod.marca ? ' (' + prod.marca + ')' : '');
+    document.getElementById('comp-prod-id').value = prod.id;
+    document.getElementById('comp-cantidad').focus();
+}
+
 window.guardarNuevoProd = function() {
-    const codigo = document.getElementById('np-codigo').value.trim();
+    let codigo = document.getElementById('np-codigo').value.trim();
     const nombre = document.getElementById('np-nombre').value.trim();
     const marca = document.getElementById('np-marca').value.trim();
     const unidad = document.getElementById('np-unidad').value;
     
-    if (!codigo || !nombre) return window.showToast('Código y nombre son obligatorios', 'error');
+    if (!nombre) return window.showToast('El nombre del producto es obligatorio', 'error');
+    
+    // Automatización de EAN-13 si el campo está vacío
+    if (!codigo) {
+        codigo = compras.generarCodigoInterno();
+        document.getElementById('np-codigo').value = codigo;
+    }
+
     let exist = store.db.productos.find(p => p.codigo === codigo || p.barcode === codigo);
-    if (exist && !exist.deleted) return window.showToast('Código ya existe', 'error');
+    if (exist && !exist.deleted) return window.showToast('Código ya existe en un producto activo', 'error');
     
     let pId;
     if (exist && exist.deleted) {

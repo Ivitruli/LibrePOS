@@ -61,7 +61,7 @@ window.showInfTab = function(id, btn) {
 };
 
 window.populateSelects = function() {
-    const provs = '<option value="">— Seleccionar —</option>' + store.db.proveedores.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+    const provs = '<option value="">— Seleccionar —</option>' + store.db.proveedores.filter(p => !p.deleted).map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
     document.querySelectorAll('#np-proveedor, #ep-prod-proveedor, #deuda-prov, #comp-proveedor').forEach(s => { const val = s.value; s.innerHTML = provs; s.value = val; });
     
     // Filtramos las cuentas activas

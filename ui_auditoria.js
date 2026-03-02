@@ -135,15 +135,17 @@ window.confirmarAuditoria = function() {
                 });
 
             } else if (diff > 0) {
-                // SOBRANTE: Se crea un nuevo lote con la cantidad encontrada usando el costo de referencia
                 store.db.lotes.push({
-                    id: 'lote_ajuste_' + Date.now().toString() + Math.random().toString().slice(2,5),
+                    id: 'lote_ajuste_' + Date.now().toString() + Math.random().toString(36).substring(2,5),
                     productoId: pId,
-                    cantidadOriginal: diff,
-                    cantidadActual: diff,
-                    costoUnitario: prod.costo || 0,
-                    fechaIngreso: fecha,
-                    vencimiento: ''
+                    fecha: fecha,
+                    vencimiento: null,
+                    cantOriginal: diff,
+                    cantDisponible: diff,
+                    costoUnit: prod.costo || 0,
+                    cuentaId: null,
+                    proveedorId: null,
+                    comprobante: 'Ajuste Físico de Stock (Sobrante)'
                 });
             }
             cambiosAplicados++;

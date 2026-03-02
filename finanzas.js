@@ -11,7 +11,7 @@ const finanzas = {
             saldo -= (d.pagos || []).filter(p => p.cuentaId === cId && p.tipo === 'pago').reduce((s, p) => s + p.monto, 0);
         });
         
-        saldo -= store.db.lotes.filter(l => l.cuentaId === cId).reduce((s, l) => s + (l.cantOriginal * l.costoUnit), 0);
+        // CORRECCIÓN: Se eliminó la resta de store.db.lotes para evitar duplicación con store.db.gastos
         
         saldo += store.db.movimientos.filter(m => m.cuentaId === cId && m.tipo === 'deposito').reduce((s, m) => s + m.importe, 0);
         saldo -= store.db.movimientos.filter(m => m.cuentaId === cId && m.tipo === 'retiro').reduce((s, m) => s + m.importe, 0);
@@ -19,7 +19,6 @@ const finanzas = {
         saldo += store.db.ajustesCaja.filter(a => a.cuentaId === cId && a.tipo === 'ingreso').reduce((s, a) => s + a.diferencia, 0);
         saldo -= store.db.ajustesCaja.filter(a => a.cuentaId === cId && a.tipo === 'perdida').reduce((s, a) => s + Math.abs(a.diferencia), 0);
 
-        // Incorporación del cálculo de transferencias internas
         if (store.db.transferencias) {
             saldo -= store.db.transferencias.filter(t => t.origenId === cId).reduce((s, t) => s + t.monto, 0);
             saldo += store.db.transferencias.filter(t => t.destinoId === cId).reduce((s, t) => s + t.monto, 0);
@@ -30,12 +29,12 @@ const finanzas = {
 
     calcGananciaNetaGlobal: function() {
         let ganancia = store.db.ventas.reduce((s, v) => s + v.totalVenta - v.totalCosto, 0);
-        ganancia -= store.db.gastos.reduce((s, g) => s + g.importe, 0);
+        ganancia -= store.db.gastos.filter(g => g.categoria !== 'Mercadería').reduce((s, g) => s + g.importe, 0);
         ganancia += store.db.ajustesCaja.filter(a => a.tipo === 'ingreso' && !a.concepto?.includes('Envío')).reduce((s, a) => s + a.diferencia, 0);
         ganancia -= store.db.ajustesCaja.filter(a => a.tipo === 'perdida').reduce((s, a) => s + Math.abs(a.diferencia), 0);
-        store.db.cuentasPorPagar.forEach(d => {
-            ganancia += (d.pagos || []).filter(p => p.tipo === 'descuento').reduce((s, p) => s + p.monto, 0);
-        });
+        
+        // CORRECCIÓN: Se eliminó el bucle de cuentasPorPagar para evitar la doble suma de los descuentos obtenidos.
+        
         return ganancia;
     },
 

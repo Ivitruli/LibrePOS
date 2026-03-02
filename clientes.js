@@ -29,8 +29,15 @@ const clientes = {
     eliminar: function(id) {
         const cli = store.db.clientes.find(c => c.id === id);
         if (!cli) throw new Error('Cliente no encontrado.');
+        
         const deuda = this.getDeudaTotal(id);
-        if (deuda > 0) throw new Error(`No se puede eliminar. El cliente mantiene una deuda de $${deuda.toFixed(2)}.`);
+        if (deuda > 0) {
+            throw new Error(`No se puede eliminar. El cliente mantiene una deuda de $${deuda.toFixed(2)}.`);
+        }
+        if (deuda < 0) {
+            throw new Error(`No se puede eliminar. El comercio posee un saldo a favor del cliente por $${Math.abs(deuda).toFixed(2)}. Debe liquidarse antes de proceder.`);
+        }
+        
         cli.deleted = true;
     },
 

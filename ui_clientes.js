@@ -66,12 +66,12 @@ window.eliminarCliente = function(id) {
 
 window.abrirCobroCliente = function(id) {
     const deuda = clientes.getDeudaTotal(id);
-    if (deuda <= 0) return window.showToast('El cliente no registra deuda.', 'error');
     
     document.getElementById('cobro-cli-id').value = id;
-    document.getElementById('cobro-monto').value = deuda;
+    // Si hay deuda, sugiere el monto total. Si es anticipo, inicia vacío.
+    document.getElementById('cobro-monto').value = deuda > 0 ? deuda : ''; 
     document.getElementById('cobro-fecha').value = (new Date(Date.now() - new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 10);
-    document.getElementById('cobro-desc').value = 'Pago a cuenta';
+    document.getElementById('cobro-desc').value = deuda > 0 ? 'Pago a cuenta' : 'Anticipo / Saldo a favor';
     document.getElementById('modal-cobro-cliente').classList.add('open');
 };
 
@@ -135,7 +135,7 @@ window.renderTablaClientes = function() {
                     <th>Acciones</th>
                 </tr>
             </thead>
-            <tbody>
+           <tbody>
                 ${clis.map(c => {
                     const deuda = clientes.getDeudaTotal(c.id);
                     const exc = c.limiteCredito > 0 && deuda > c.limiteCredito;
@@ -149,7 +149,7 @@ window.renderTablaClientes = function() {
                         </td>
                         <td>
                             <div style="display:flex; gap:5px;">
-                                <button class="btn btn-sm btn-success" onclick="window.abrirCobroCliente('${c.id}')" ${deuda <= 0 ? 'disabled' : ''}>✅ Cobrar</button>
+                                <button class="btn btn-sm btn-success" onclick="window.abrirCobroCliente('${c.id}')">💵 Ingresar Pago</button>
                                 <button class="btn btn-sm btn-secondary" onclick="window.verHistorialCliente('${c.id}')">📄 Historial</button>
                                 <button class="btn btn-sm btn-secondary" onclick="window.abrirEditarCliente('${c.id}')">✏️ Modificar</button>
                                 <button class="btn btn-sm btn-danger" onclick="window.eliminarCliente('${c.id}')">🗑️</button>

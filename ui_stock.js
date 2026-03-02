@@ -15,94 +15,87 @@ window.renderTablaProductos = function() {
     let ps = store.db.productos.filter(p => !p.deleted);
     if (f) ps = ps.filter(p => p.nombre.toLowerCase().includes(f) || p.barcode?.includes(f) || p.codigo?.toLowerCase().includes(f));
     
-    // 1. Expandir productos por proveedor (Si un producto tiene múltiples proveedores, crear filas virtuales)
     let filasExpandidas = [];
     
     ps.forEach(p => {
-        // Buscar todos los proveedores únicos que alguna vez trajeron este producto
-        const lotes = store.db.lotes.filter(l => l.productoId === p.id && l.proveedorId);
-        const proveedoresUnicos = [...new Set(lotes.map(l => l.proveedorId))];
+        // Filtramos solo los lotes que tienen stock físico real
+        const lotesActivos = store.db.lotes.filter(l => l.productoId === p.id && l.cantDisponible > 0);
         
-        if (proveedoresUnicos.length === 0) {
-            // Producto sin historial de compras/proveedor
-            filasExpandidas.push({ ...p, provActivoId: null, provActivoNombre: 'Sin Proveedor', isPrincipal: true });
+        if (lotesActivos.length === 0) {
+            // Si no hay stock, mostramos solo al último proveedor que nos vendió
+            const ultimoLote = store.db.lotes.filter(l => l.productoId === p.id).sort((a,b) => new Date(b.fecha) - new Date(a.fecha))[0];
+            const provId = ultimoLote?.proveedorId || 'sin_prov';
+            const provNombre = ultimoLote ? (store.db.proveedores.find(x => x.id === provId)?.nombre || 'Desconocido') : 'Sin Proveedor';
+            
+            filasExpandidas.push({ ...p, provActivoId: provId, provActivoNombre: provNombre, costoEspecifico: ultimoLote?.costoUnit || 0, stockProv: 0 });
         } else {
-            // Crear una fila por cada proveedor
-            proveedoresUnicos.forEach((provId, index) => {
+            // Generamos una fila por cada proveedor con stock activo
+            const proveedoresUnicos = [...new Set(lotesActivos.map(l => l.proveedorId))];
+            
+            proveedoresUnicos.forEach(provId => {
                 const provNombre = store.db.proveedores.find(x => x.id === provId)?.nombre || 'Desconocido';
-                filasExpandidas.push({ 
-                    ...p, 
-                    provActivoId: provId, 
-                    provActivoNombre: provNombre,
-                    // Solo la primera fila del producto mostrará los inputs editables de reglas de negocio
-                    isPrincipal: index === 0 
-                });
+                const lotesProv = lotesActivos.filter(l => l.proveedorId === provId);
+                const stockDelProv = lotesProv.reduce((acc, l) => acc + l.cantDisponible, 0);
+                // Tomamos el costo del lote más reciente de ESTE proveedor
+                const costoProv = lotesProv.sort((a,b) => new Date(b.fecha) - new Date(a.fecha))[0].costoUnit;
+                
+                filasExpandidas.push({ ...p, provActivoId: provId, provActivoNombre: provNombre, costoEspecifico: costoProv, stockProv: stockDelProv });
             });
         }
     });
     
-    // 2. Aplicar ordenamiento a las filas expandidas
     filasExpandidas.sort((a, b) => {
         if (sort === 'nombre') return a.nombre.localeCompare(b.nombre);
         if (sort === 'prov') return a.provActivoNombre.localeCompare(b.provActivoNombre);
-        if (sort === 'venc') {
-            const va = store.db.lotes.filter(l => l.productoId === a.id && l.vencimiento && l.cantDisponible > 0).sort((x,y) => x.vencimiento.localeCompare(y.vencimiento))[0]?.vencimiento || '9999-99-99';
-            const vb = store.db.lotes.filter(l => l.productoId === b.id && l.vencimiento && l.cantDisponible > 0).sort((x,y) => x.vencimiento.localeCompare(y.vencimiento))[0]?.vencimiento || '9999-99-99';
-            return va.localeCompare(vb);
-        }
     });
     
-    // 3. Renderizar HTML
     document.getElementById('tabla-productos').innerHTML = filasExpandidas.map(p => {
-        const st = inventario.getStock(p.id); 
-        const ex = store.db.preciosExtra[p.id] || {}; 
-        const ca = inventario.getCostoMasAlto(p.id);
+        const ruleKey = p.provActivoId !== 'sin_prov' ? `${p.id}_${p.provActivoId}` : p.id;
+        const ex = store.db.preciosExtra[ruleKey] || store.db.preciosExtra[p.id] || {}; 
+        const ca = p.costoEspecifico > 0 ? p.costoEspecifico : inventario.getCostoMasAlto(p.id);
         const marcaHtml = p.marca ? `<div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;">${p.marca}</div>` : '';
         
-        // Solo renderizamos los inputs de reglas de precios si es la fila "principal" del producto.
-        // Las filas secundarias (del mismo producto pero distinto proveedor) muestran guiones para no duplicar datos ni romper el guardado global.
-        let reglasHtml = '';
-        if (p.isPrincipal) {
-            reglasHtml = `
-                <td><input class="edit-inline" data-f="fijo" value="${ex.fijo || 0}" oninput="window.recalcInline(this)"></td>
-                <td><input class="edit-inline" data-f="imp" value="${ex.imp || 0}" oninput="window.recalcInline(this)"></td>
-                <td><input class="edit-inline" data-f="gan" value="${ex.gan || 30}" oninput="window.recalcInline(this)"></td>
-                <td><input class="edit-inline" data-f="desc" value="${ex.desc || 0}" oninput="window.recalcInline(this)"></td>
-                <td style="text-align:center;"><input type="checkbox" data-f="alCosto" ${ex.alCosto ? 'checked' : ''} onchange="window.recalcInline(this)"></td>
-                <td class="mono" id="pf-${p.id}"><strong>${fmt(inventario.calcPrecioFinal(p.id))}</strong></td>
-                <td style="white-space:nowrap;">
-                    <button class="btn btn-secondary btn-sm" onclick="window.abrirEditarProd('${p.id}')">✏️ Modificar</button> 
-                    <button class="btn btn-danger btn-sm" onclick="if(confirm('¿Eliminar?')){store.db.productos.find(x=>x.id==='${p.id}').deleted=true;store.saveDB();window.renderTablaProductos();if(typeof window.renderProductGrid === 'function') window.renderProductGrid();}">🗑️</button>
-                </td>
-            `;
-        } else {
-            reglasHtml = `
-                <td colspan="5" style="text-align:center;color:var(--muted);font-size:0.75rem;background:var(--surface2);">— Reglas vinculadas a la fila principal —</td>
-                <td class="mono" style="background:var(--surface2);"><strong>${fmt(inventario.calcPrecioFinal(p.id))}</strong></td>
-                <td style="background:var(--surface2);"></td>
-            `;
-        }
-
         return `
-        <tr data-pid="${p.id}">
+        <tr data-pid="${p.id}" data-rulekey="${ruleKey}" data-costo="${ca}">
             <td class="mono" style="font-size:.7rem">${p.codigo}</td>
             <td style="font-size:0.85rem; font-weight:600; color:var(--ink);">${p.provActivoNombre}</td>
             <td><strong>${p.nombre}</strong>${marcaHtml}</td>
             <td>${p.unidad}</td>
             <td class="mono">${p.stockMinimo || 0}</td>
-            <td class="mono" style="color:${st <= (p.stockMinimo || 0) ? 'var(--accent)' : 'inherit'}">${fmtQty(st, p.unidad)}</td>
+            <td class="mono" style="color:${p.stockProv <= (p.stockMinimo || 0) ? 'var(--accent)' : 'inherit'}">${fmtQty(p.stockProv, p.unidad)}</td>
             <td class="mono">${fmt(ca)}</td>
-            ${reglasHtml}
+            <td><input class="edit-inline" data-f="fijo" value="${ex.fijo || 0}" oninput="window.recalcInline(this)"></td>
+            <td><input class="edit-inline" data-f="imp" value="${ex.imp || 0}" oninput="window.recalcInline(this)"></td>
+            <td><input class="edit-inline" data-f="gan" value="${ex.gan || 30}" oninput="window.recalcInline(this)"></td>
+            <td><input class="edit-inline" data-f="desc" value="${ex.desc || 0}" oninput="window.recalcInline(this)"></td>
+            <td style="text-align:center;"><input type="checkbox" data-f="alCosto" ${ex.alCosto ? 'checked' : ''} onchange="window.recalcInline(this)"></td>
+            <td class="mono" id="pf-${ruleKey}"><strong>$0.00</strong></td>
+            <td style="white-space:nowrap;">
+                <button class="btn btn-secondary btn-sm" onclick="window.abrirEditarProd('${p.id}')">✏️ Modificar</button> 
+                <button class="btn btn-danger btn-sm" onclick="if(confirm('¿Eliminar?')){store.db.productos.find(x=>x.id==='${p.id}').deleted=true;store.saveDB();window.renderTablaProductos();}">🗑️</button>
+            </td>
         </tr>`;
     }).join('');
+
+    document.querySelectorAll('#tabla-productos tr[data-rulekey]').forEach(tr => {
+        const inp = tr.querySelector('[data-f="fijo"]');
+        if(inp) window.recalcInline(inp);
+    });
 };
 
 window.recalcInline = function(inp) {
-    const tr = inp.closest('tr'); const pId = tr.dataset.pid; const c = inventario.getCostoMasAlto(pId);
+    const tr = inp.closest('tr'); 
+    const ruleKey = tr.dataset.rulekey; 
+    const c = parseFloat(tr.dataset.costo) || 0;
     const v = f => parseFloat(tr.querySelector(`[data-f="${f}"]`)?.value) || 0;
     const alCosto = tr.querySelector(`[data-f="alCosto"]`)?.checked || false;
+    
     let raw = alCosto ? (c + v('fijo')) * (1 + v('imp') / 100) : (c + v('fijo')) * (1 + v('imp') / 100) * (1 + v('gan') / 100) * (1 - v('desc') / 100);
-    tr.querySelector(`#pf-${pId}`).innerHTML = `<strong>${fmt(Math.ceil(raw/10)*10)}</strong>`;
+
+    const celdaPrecio = document.getElementById(`pf-${ruleKey}`);
+    if (celdaPrecio) {
+        celdaPrecio.innerHTML = `<strong>${fmt(Math.ceil(raw/10)*10)}</strong>`;
+    }
 };
 
 window.guardarPreciosTodos = function() {

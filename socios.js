@@ -59,10 +59,18 @@ const socios = {
         } 
         
         if (tipo === 'retiro') {
-            const mov = { id: Date.now().toString(), socioId: socioId, cuentaId: cuentaId, fecha: fecha, tipo: tipo, importe: imp, descripcion: 'Retiro de Fondos / Préstamo a ' + sName };
+            if (cuentaId) {
+                const saldoCaja = finanzas.calcSaldoCuenta(cuentaId);
+                if (imp > saldoCaja + 0.01) {
+                    throw new Error(`Fondo insuficiente. La cuenta seleccionada solo dispone de $${saldoCaja.toFixed(2)}`);
+                }
+            }
+            
+            const desc = cuentaId ? 'Retiro de Fondos / Préstamo a ' : 'Retiro de Mercadería en especie - ';
+            const mov = { id: Date.now().toString(), socioId: socioId, cuentaId: cuentaId, fecha: fecha, tipo: tipo, importe: imp, descripcion: desc + sName };
             store.db.movimientos.push(mov);
             return mov;
-        } 
+        }
         
         if (tipo === 'deposito') {
             // CORRECCIÓN: Ahora se considera un Aporte de Capital puro, no una deuda exigible

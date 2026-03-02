@@ -117,17 +117,24 @@ window.confirmarVenta = function() {
     const subtotalSinEnvio = calculo.totalFinal - calculo.envio;
 
     let costoTotalEstimado = 0;
-    for (const i of store.carrito) {
-        if (i.isPromo) {
-            for (const sub of i.items) {
-                const costoUnidad = inventario.getPrecioCart(sub.id, true); 
-                costoTotalEstimado += costoUnidad * sub.cantidad * i.cantidad;
+    // CORRECCIÓN: Pre-validación acumulativa para evitar crash en consumo cruzado
+        let stockRequerido = {};
+        for (const i of store.carrito) {
+            if (i.isPromo) {
+                for (const sub of i.items) {
+                    stockRequerido[sub.id] = (stockRequerido[sub.id] || 0) + (sub.cantidad * i.cantidad);
+                }
+            } else {
+                stockRequerido[i.productoId] = (stockRequerido[i.productoId] || 0) + i.cantidad;
             }
-        } else {
-            const costoUnidad = inventario.getPrecioCart(i.productoId, true);
-            costoTotalEstimado += costoUnidad * i.cantidad;
         }
-    }
+        
+        for (const [pId, reqQty] of Object.entries(stockRequerido)) {
+            if (reqQty > inventario.getStock(pId) + 0.001) {
+                const pNombre = store.db.productos.find(x => x.id === pId)?.nombre || 'Producto';
+                throw new Error(`Stock global insuficiente. Se requieren ${reqQty.toFixed(2)} unidades de "${pNombre}" en total para esta venta.`);
+            }
+        }
 
     if (subtotalSinEnvio < costoTotalEstimado) {
         if (!confirm(`⚠️ ALERTA DE PÉRDIDA\n\nEl precio final de los productos ($${subtotalSinEnvio.toFixed(2)}) es MENOR al costo de la mercadería ($${costoTotalEstimado.toFixed(2)}).\n\n¿Estás seguro de querer registrar esta venta a pérdida?`)) {

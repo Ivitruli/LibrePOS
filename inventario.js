@@ -15,17 +15,37 @@ const inventario = {
     },
 
     calcPrecioFinal: function(pid, forceAlCosto = false) {
-        const costo = this.getCostoMasAlto(pid) || 0;
-        if (costo === 0) return 0;
+        // 1. Evaluar la cola PEPS: Identificar el lote más antiguo con disponibilidad
+        const lotesDisponibles = store.db.lotes
+            .filter(l => l.productoId === pid && l.cantDisponible > 0)
+            .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+        let costoActivo = 0;
+        let ruleKey = pid; // Clave de retrocompatibilidad o producto sin proveedor
+
+        if (lotesDisponibles.length > 0) {
+            const lotePeps = lotesDisponibles[0];
+            costoActivo = lotePeps.costoUnit;
+            if (lotePeps.proveedorId) {
+                // Generar clave combinada para extraer reglas específicas del proveedor
+                ruleKey = `${pid}_${lotePeps.proveedorId}`; 
+            }
+        } else {
+            // Manejo de excepciones: Producto sin stock; se asume el costo histórico máximo
+            costoActivo = this.getCostoMasAlto(pid) || 0;
+        }
+
+        if (costoActivo === 0) return 0;
         
-        const ex = store.db.preciosExtra[pid] || { fijo: 0, imp: 0, gan: 30, desc: 0, alCosto: false, precioImpreso: 0 };
+        // 2. Resolución de rentabilidad
+        const ex = store.db.preciosExtra[ruleKey] || store.db.preciosExtra[pid] || { fijo: 0, imp: 0, gan: 30, desc: 0, alCosto: false, precioImpreso: 0 };
         const isAlCosto = forceAlCosto || ex.alCosto;
         let raw = 0;
         
         if (isAlCosto) {
-            raw = (costo + (ex.fijo || 0)) * (1 + (ex.imp || 0) / 100);
+            raw = (costoActivo + (ex.fijo || 0)) * (1 + (ex.imp || 0) / 100);
         } else {
-            raw = (costo + (ex.fijo || 0)) * (1 + (ex.imp || 0) / 100) * (1 + (ex.gan || 0) / 100) * (1 - (ex.desc || 0) / 100);
+            raw = (costoActivo + (ex.fijo || 0)) * (1 + (ex.imp || 0) / 100) * (1 + (ex.gan || 0) / 100) * (1 - (ex.desc || 0) / 100);
         }
         
         return Math.ceil(raw / 10) * 10;

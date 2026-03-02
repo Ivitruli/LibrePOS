@@ -1,8 +1,8 @@
 const store = require('./store.js');
 const proveedores = require('./proveedores.js');
+const finanzas = require('./finanzas.js'); // Inyección de dependencia financiera
 
 const compras = {
-    // Genera un código EAN-13 válido para uso interno (Prefijo 200)
     generarCodigoInterno: function() {
         const prefijo = "200";
         const timestamp = Date.now().toString().slice(-9);
@@ -17,7 +17,6 @@ const compras = {
         return base + verificador;
     },
 
-    // Procesa una factura/remito con múltiples productos
     registrarRemito: function(proveedorId, comprobante, fecha, items, estadoPago, cuentaId) {
         if (!items || items.length === 0) {
             throw new Error('El comprobante no tiene productos asignados.');
@@ -44,13 +43,11 @@ const compras = {
             });
         });
 
+        // Corrección de bifurcación contable
         if (estadoPago === 'adeudado' && proveedorId) {
-            proveedores.registrarDeuda(
-                proveedorId,
-                fecha,
-                costoTotalRemito,
-                'Factura/Remito: ' + (comprobante || 'S/N')
-            );
+            proveedores.registrarDeuda(proveedorId, fecha, costoTotalRemito, 'Factura/Remito: ' + (comprobante || 'S/N'));
+        } else if (estadoPago === 'pagado' && cuentaId) {
+            finanzas.registrarGasto(fecha, 'Mercadería', 'variable', costoTotalRemito, cuentaId, 'Compra a Proveedor: ' + (comprobante || 'S/N'));
         }
 
         return costoTotalRemito;

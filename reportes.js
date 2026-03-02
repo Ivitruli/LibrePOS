@@ -113,10 +113,13 @@ const reportes = {
 
         // 5. MOVIMIENTOS DE SOCIOS Y CAPITAL
         store.db.movimientos.filter(m => m.fecha >= desde && m.fecha <= hasta).forEach(m => {
-            let s = store.db.socios.find(x => x.id === m.socioId)?.nombre || 'Socio Desconocido'; let cName = store.db.cuentas.find(x => x.id === m.cuentaId)?.nombre || 'Caja';
+            let s = store.db.socios.find(x => x.id === m.socioId)?.nombre || 'Socio Desconocido'; 
+            
+            // CORRECCIÓN: Diferenciar contablemente retiro de efectivo vs. especie
+            let cName = m.cuentaId ? (store.db.cuentas.find(x => x.id === m.cuentaId)?.nombre || 'Caja') : 'Mercadería (Retiro en especie)';
+            
             if (m.tipo === 'retiro') asientos.push({ f: m.fecha + 'T00:04', r: 'Retiro / Préstamo Socio', ls: [{ c: etiq('Cuenta Particular: ' + s, 'P/A', true), d: m.importe, h: 0 }, { c: etiq(cName, 'A', false), d: 0, h: m.importe }] });
             
-            // CORRECCIÓN: El depósito de un socio es un aumento directo del Capital Social, no de su cuenta particular (deuda).
             if (m.tipo === 'deposito') asientos.push({ f: m.fecha + 'T00:04', r: 'Aporte de Capital', ls: [{ c: etiq(cName, 'A', true), d: m.importe, h: 0 }, { c: etiq('Capital Social (' + s + ')', 'PN', false), d: 0, h: m.importe }] });
             
             if (m.tipo === 'asignacion') asientos.push({ f: m.fecha + 'T00:04', r: 'Asignación Utilidades', ls: [{ c: etiq('Resultados Acumulados', 'PN', true), d: m.importe, h: 0 }, { c: etiq('Cuenta Particular: ' + s, 'P/A', false), d: 0, h: m.importe }] });

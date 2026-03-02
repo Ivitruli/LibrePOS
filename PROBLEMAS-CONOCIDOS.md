@@ -1,0 +1,6 @@
+-Menú de colores.
+-Al cargar dinero en efectivo como depósito de capital y registrar un gasto en efectivo, no se descontó el dinero. Tampoco en el libro diario.
+-Al crear varios proveedores no es posible deseleccionar la fecha de pedido y entrega.
+-Al registrar compras en cuenta corriente no se registra en el patrimonio neto.
+-Al solicitar que se descarguen los códigos de barra arroja el error "bibliotecas jpdf o jsbarcode no cargada"
+-No se guarda ningún archivo en la carpeta seleccionada.

@@ -112,7 +112,7 @@ window.cargarLogo = function(event) {
 window.guardarConfig = function() {
     if(!store.db.config) store.db.config = {};
     
-    ['nombre','direccion','tel','email','ig','fb'].forEach(k => {
+    ['nombre','direccion','tel','email','ig','fb', 'descEfectivo'].forEach(k => {
         const el = document.getElementById('cfg-'+k);
         if (el) store.db.config[k] = el.value;
     });
@@ -175,7 +175,7 @@ window.importarDatos = function(event) {
 window.cargarInputsConfig = function() {
     if(!store.db.config) return;
     
-    ['nombre','direccion','tel','email','ig','fb'].forEach(k => {
+    ['nombre','direccion','tel','email','ig','fb', 'descEfectivo'].forEach(k => {
         if(document.getElementById('cfg-'+k)) document.getElementById('cfg-'+k).value = store.db.config[k] || '';
     });
     

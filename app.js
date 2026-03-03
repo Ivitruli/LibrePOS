@@ -43,7 +43,8 @@ window.showSection = function(id, btn) {
         document.getElementById('inf-hasta').value = today();
         window.showInfTab('resumen', document.querySelector('.tab-pill'));
     }
-    if (id === 'config') window.cargarConfig();
+    // CORRECCIÓN: Nombre exacto de la función en ui_config.js
+    if (id === 'config') window.cargarInputsConfig();
 };
 
 window.showProvTab = function(id, btn) {
@@ -61,16 +62,16 @@ window.showInfTab = function(id, btn) {
 };
 
 window.populateSelects = function() {
+    // 1. Proveedores (excluyendo eliminados)
     const provs = '<option value="">— Seleccionar —</option>' + store.db.proveedores.filter(p => !p.deleted).map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
     document.querySelectorAll('#np-proveedor, #ep-prod-proveedor, #deuda-prov, #comp-proveedor').forEach(s => { const val = s.value; s.innerHTML = provs; s.value = val; });
     
-    // Filtramos las cuentas activas
+    // 2. Cuentas y Saldos
     const ctasActivas = store.db.cuentas.filter(c => !c.deleted);
     const ctas = ctasActivas.map(c => `<option value="${c.id}">${c.nombre} (${fmt(finanzas.calcSaldoCuenta(c.id))})</option>`).join('');
-    
     document.querySelectorAll('#comp-cuenta, #pd-cuenta, #gasto-cuenta, #mov-cuenta, #envios-cuenta, #transf-origen, #transf-destino').forEach(s => { const val = s.value; s.innerHTML = ctas; s.value = val || (ctasActivas[0]?.id || ''); });
 
-    // Selector específico para cobros a clientes (incluye la opción de desestimar deuda)
+    // 3. Cobros a Clientes
     const cobroCuenta = document.getElementById('cobro-cuenta');
     if (cobroCuenta) {
         const valCobro = cobroCuenta.value;
@@ -78,10 +79,11 @@ window.populateSelects = function() {
         cobroCuenta.value = valCobro || (ctasActivas[0]?.id || '');
     }
     
+    // 4. Socios
     const socs = '<option value="">— Seleccionar —</option>' + store.db.socios.filter(s => !s.deleted).map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
     document.querySelectorAll('#mov-socio, #rs-socio').forEach(s => { const val = s.value; s.innerHTML = socs; s.value = val; });
 
-    // CARGA DE CLIENTES (CUENTA CORRIENTE)
+    // 5. Clientes en POS
     const clientesDropdown = '<option value="">— Seleccionar Cliente —</option>' + (store.db.clientes || []).filter(c => !c.deleted).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
     const posClienteSelect = document.getElementById('pos-cliente');
     if (posClienteSelect) {
@@ -90,12 +92,20 @@ window.populateSelects = function() {
         posClienteSelect.value = val;
     }
     
-    document.getElementById('medios-pago-btns').innerHTML = ctasActivas.map(c => `<button class="medio-btn${c.id === store.medioSeleccionado ? ' selected' : ''}" onclick="window.selectMedio('${c.id}',this)">${c.nombre}</button>`).join('');
-    document.getElementById('vent-filtro-medio').innerHTML = '<option value="">Todas</option>' + ctasActivas.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
+    // 6. Medios de Pago en POS (Restauración)
+    const mediosBtns = document.getElementById('medios-pago-btns');
+    if (mediosBtns) {
+        mediosBtns.innerHTML = ctasActivas.map(c => `<button class="medio-btn${c.id === store.medioSeleccionado ? ' selected' : ''}" onclick="window.selectMedio('${c.id}',this)">${c.nombre}</button>`).join('');
+    }
+    
+    const ventFiltroMedio = document.getElementById('vent-filtro-medio');
+    if (ventFiltroMedio) {
+        ventFiltroMedio.innerHTML = '<option value="">Todas</option>' + ctasActivas.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
+    }
 };
 
 // INIT GLOBAL
-window.aplicarBranding();
+if (typeof window.aplicarColores === 'function') window.aplicarColores();
 window.populateSelects();
 ['comp','gasto','deuda','mov', 'cobro'].forEach(p => {
     const el = document.getElementById(`${p}-fecha`);

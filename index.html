@@ -156,7 +156,8 @@
 
   <div class="card">
     <div class="card-title">2. Agregar Productos al Comprobante</div>
-    <div class="form-grid">
+    
+    <div class="form-grid mb-1">
       <div class="form-group">
         <label>Código de barras / interno *</label>
         <div class="d-flex gap-sm">
@@ -165,9 +166,29 @@
         </div>
       </div>
       <div class="form-group"><label>Producto (autocompletado)</label><input type="text" id="comp-prod-nombre" readonly class="bg-surface2" placeholder="—"><input type="hidden" id="comp-prod-id"></div>
-      <div class="form-group"><label>Cantidad *</label><input type="number" id="comp-cantidad" step="0.001" min="0" placeholder="0"></div>
-      <div class="form-group"><label>Costo unitario ($) *</label><input type="number" id="comp-costo" step="0.01" min="0" placeholder="0.00"></div>
       <div class="form-group"><label>Vencimiento</label><input type="date" id="comp-venc"></div>
+    </div>
+
+    <div class="form-grid bg-surface2 p-1" style="border:1px dashed var(--border); border-radius:5px;">
+      <div class="form-group"><label>Cant. de Bultos *</label><input type="number" id="comp-bultos" value="1" min="0.001" step="0.001" oninput="window.calcCostoUnitarioCompra()"></div>
+      <div class="form-group"><label>Unidades x Bulto *</label><input type="number" id="comp-uni-bulto" value="1" min="1" step="1" oninput="window.calcCostoUnitarioCompra()"></div>
+      
+      <div class="form-group"><label>Costo Bulto ($) *</label><input type="number" id="comp-costo-base" placeholder="0.00" step="0.01" min="0" oninput="window.calcCostoUnitarioCompra()"></div>
+      <div class="form-group"><label>Descuento x Bulto ($)</label><input type="number" id="comp-desc-bulto" placeholder="0.00" step="0.01" min="0" oninput="window.calcCostoUnitarioCompra()"></div>
+      <div class="form-group"><label>Imp. Internos x Bulto ($)</label><input type="number" id="comp-imp-int" placeholder="0.00" step="0.01" min="0" oninput="window.calcCostoUnitarioCompra()"></div>
+      <div class="form-group"><label>IVA x Bulto ($)</label><input type="number" id="comp-iva" placeholder="0.00" step="0.01" min="0" oninput="window.calcCostoUnitarioCompra()"></div>
+    </div>
+    
+    <div class="d-flex justify-between align-end mt-1 mb-1 p-sm" style="background:var(--surface); border-left:4px solid var(--green); border-radius:3px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+       <div>
+          <div style="font-size:.85rem; color:var(--muted);">Inventario a inyectar: <strong id="lbl-total-unidades" class="mono text-text">0.00</strong> unidades</div>
+       </div>
+       <div class="text-right">
+          <div style="font-size:.8rem; color:var(--green); font-weight:bold;">Costo Final Unitario (Neto)</div>
+          <div id="lbl-costo-unitario-final" class="mono text-green" style="font-size:1.6rem; font-weight:900;">$0.00</div>
+          <input type="hidden" id="comp-costo-final-oculto">
+          <input type="hidden" id="comp-cantidad-total-oculta">
+       </div>
     </div>
     
     <div class="mt-1 text-right">

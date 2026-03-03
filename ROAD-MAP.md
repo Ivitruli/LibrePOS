@@ -1,3 +1,2 @@
 -Que se pueda poner gastos programados y luego ejecutar el pago
--Cargar productos a la compra por nombre.
 -Que al cargar compras sugiera el último precio para ese proveedor.

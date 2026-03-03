@@ -89,19 +89,49 @@ window.guardarNuevoProd = function() {
     document.getElementById('comp-cantidad').focus();
 };
 
+window.calcCostoUnitarioCompra = function() {
+    const bultos = parseFloat(document.getElementById('comp-bultos').value) || 0;
+    const uniXBulto = parseFloat(document.getElementById('comp-uni-bulto').value) || 1;
+    
+    const costoBase = parseFloat(document.getElementById('comp-costo-base').value) || 0;
+    const desc = parseFloat(document.getElementById('comp-desc-bulto').value) || 0;
+    const impInt = parseFloat(document.getElementById('comp-imp-int').value) || 0;
+    const iva = parseFloat(document.getElementById('comp-iva').value) || 0;
+    
+    // Matemática comercial
+    const totalUnidades = bultos * uniXBulto;
+    const costoFinalBulto = costoBase - desc + impInt + iva;
+    const costoFinalUnitario = uniXBulto > 0 ? (costoFinalBulto / uniXBulto) : 0; 
+
+    // Renderizado visual y variables ocultas
+    document.getElementById('lbl-total-unidades').textContent = totalUnidades.toFixed(2);
+    document.getElementById('lbl-costo-unitario-final').textContent = fmt(costoFinalUnitario);
+    
+    document.getElementById('comp-cantidad-total-oculta').value = totalUnidades;
+    document.getElementById('comp-costo-final-oculto').value = costoFinalUnitario;
+};
+
 window.agregarItemRemito = function() {
     const pId = document.getElementById('comp-prod-id').value;
-    const cant = parseFloat(document.getElementById('comp-cantidad').value);
-    const costo = parseFloat(document.getElementById('comp-costo').value);
+    const cant = parseFloat(document.getElementById('comp-cantidad-total-oculta').value);
+    const costo = parseFloat(document.getElementById('comp-costo-final-oculto').value);
     const venc = document.getElementById('comp-venc').value;
     
-    if (!pId || !cant || isNaN(costo)) return window.showToast('Faltan datos del producto', 'error');
+    if (!pId || !cant || isNaN(costo) || costo <= 0) return window.showToast('Faltan datos del producto o el costo es inválido', 'error');
     const p = store.db.productos.find(x => x.id === pId);
     
     carritoRemito.push({ productoId: pId, codigo: p.codigo, nombre: p.nombre, cantidad: cant, costoUnitario: costo, vencimiento: venc });
     window.renderTablaRemito();
     
-    ['comp-barcode', 'comp-prod-nombre', 'comp-prod-id', 'comp-cantidad', 'comp-costo', 'comp-venc'].forEach(i => document.getElementById(i).value = '');
+    // Limpieza de inputs post-carga
+    ['comp-barcode', 'comp-prod-nombre', 'comp-prod-id', 'comp-costo-base', 'comp-desc-bulto', 'comp-imp-int', 'comp-iva', 'comp-venc'].forEach(i => {
+        const el = document.getElementById(i);
+        if (el) el.value = '';
+    });
+    document.getElementById('comp-bultos').value = '1';
+    document.getElementById('comp-uni-bulto').value = '1';
+    window.calcCostoUnitarioCompra(); // Resetea visualmente la calculadora
+    
     document.getElementById('comp-barcode').focus();
 };
 

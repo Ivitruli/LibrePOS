@@ -45,9 +45,17 @@ const finanzas = {
     },
 
     getPatrimonioNeto: function() {
-        let capSocios = store.db.movimientos.filter(m => m.tipo === 'deposito').reduce((s, m) => s + m.importe, 0);
-        let capReinvertido = store.db.movimientos.filter(m => m.tipo === 'reinversion').reduce((s, m) => s + m.importe, 0);
-        return capSocios + capReinvertido + this.calcGananciaSinAsignar();
+        // 1. Activo Circulante: Liquidez en cuentas bancarias y caja
+        let liquidez = store.db.cuentas.filter(c => !c.deleted).reduce((s, c) => s + this.calcSaldoCuenta(c.id), 0);
+        
+        // 2. Activo de Cambio: Inventario físico valorizado al costo
+        let valorInventario = store.db.lotes.reduce((s, l) => s + ((parseFloat(l.cantDisponible) || 0) * (parseFloat(l.costoUnit) || 0)), 0);
+        
+        // 3. Pasivo Circulante: Deudas pendientes con proveedores
+        let pasivoProveedores = store.db.cuentasPorPagar.reduce((s, d) => s + (d.monto - (d.pagos || []).reduce((x, p) => x + p.monto, 0)), 0);
+        
+        // Ecuación Patrimonial Fundamental: Patrimonio Neto = Activo - Pasivo
+        return liquidez + valorInventario - pasivoProveedores;
     },
 
     calcSaldoSocio: function(sId) {

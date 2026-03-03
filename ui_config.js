@@ -136,14 +136,22 @@ window.guardarConfig = function() {
 
 window.elegirCarpetaGuardado = async function() {
     try {
-        if (!window.showDirectoryPicker) return window.showToast('Tu navegador no soporta esto.', 'error');
-        const dirHandle = await window.showDirectoryPicker();
-        document.getElementById('ruta-guardado').innerText = `Carpeta vinculada: ${dirHandle.name}`;
-        if(!store.db.config) store.db.config = {};
-        store.db.config.carpetaNombre = dirHandle.name;
-        store.saveDB();
-        window.showToast('Carpeta seleccionada.');
-    } catch (e) { console.error('Cancelado:', e); }
+        // Invocación del puente IPC de Electron definido en store.js
+        await store.elegirCarpetaGuardado(function(rutaAsignada) {
+            const inputRuta = document.getElementById('ruta-guardado'); 
+            if (inputRuta) {
+                inputRuta.innerText = `Carpeta vinculada: ${rutaAsignada}`;
+            }
+            
+            if(!store.db.config) store.db.config = {};
+            store.db.config.carpetaNombre = rutaAsignada;
+            store.saveDB();
+            
+            window.showToast('Directorio de guardado vinculado con éxito');
+        });
+    } catch (error) {
+        window.showToast('Error al seleccionar carpeta: ' + error.message, 'error');
+    }
 };
 
 window.exportarDatos = function() {

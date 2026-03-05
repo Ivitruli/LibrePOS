@@ -82,12 +82,18 @@ window.aplicarColores = function() {
 };
 
 window.restaurarColoresPorDefecto = function() {
-    if (!store.db.config) store.db.config = {};
-    Object.assign(store.db.config, defaultColors);
-    store.saveDB();
-    window.cargarInputsConfig();
-    window.aplicarColores();
-    window.showToast('Colores originales restaurados.');
+    try {
+        for (const [clave, valor] of Object.entries(defaultColors)) {
+            store.dao.guardarConfiguracion(clave, valor);
+        }
+        store.loadDB();
+        window.cargarInputsConfig();
+        window.aplicarColores();
+        window.showToast('Colores originales restaurados.');
+    } catch (error) {
+        console.error("Error al restaurar colores:", error);
+        window.showToast('Error al restaurar colores en base de datos', 'error');
+    }
 };
 
 window.cargarLogo = function(event) {
@@ -97,55 +103,71 @@ window.cargarLogo = function(event) {
     reader.onload = function(e) {
         const dataUrl = e.target.result;
         document.getElementById('cfg-logo-preview').innerHTML = `<img src="${dataUrl}" style="max-height:60px; border-radius:5px; border: 1px solid var(--border);">`;
-        if(!store.db.config) store.db.config = {};
-        store.db.config.logo = dataUrl;
         
-        const hLogo = document.getElementById('header-logo');
-        if (hLogo) {
-            hLogo.src = dataUrl;
-            hLogo.classList.add('visible');
+        try {
+            store.dao.guardarConfiguracion('logo', dataUrl);
+            store.loadDB();
+            
+            const hLogo = document.getElementById('header-logo');
+            if (hLogo) {
+                hLogo.src = dataUrl;
+                hLogo.classList.add('visible');
+            }
+        } catch (error) {
+            console.error("Error al guardar logo:", error);
+            window.showToast('Error al procesar el logo en base de datos', 'error');
         }
     };
     reader.readAsDataURL(file);
 };
 
 window.guardarConfig = function() {
-    if(!store.db.config) store.db.config = {};
-    
-    ['nombre','direccion','tel','email','ig','fb', 'descEfectivo'].forEach(k => {
-        const el = document.getElementById('cfg-'+k);
-        if (el) store.db.config[k] = el.value;
-    });
-    
-    // Guardar los 10 colores
-    store.db.config.bg = document.getElementById('cfg-bg').value;
-    store.db.config.surface = document.getElementById('cfg-surface').value;
-    store.db.config.color2 = document.getElementById('cfg-c2').value;
-    store.db.config.text = document.getElementById('cfg-text').value;
-    store.db.config.muted = document.getElementById('cfg-muted').value;
-    store.db.config.hText = document.getElementById('cfg-h-text').value;
-    store.db.config.color1 = document.getElementById('cfg-c1').value;
-    store.db.config.btnText = document.getElementById('cfg-btn-text').value;
-    store.db.config.success = document.getElementById('cfg-success').value;
-    store.db.config.alert = document.getElementById('cfg-alert').value;
-    
-    store.saveDB();
-    window.aplicarColores();
-    window.showToast('Configuración guardada. Colores aplicados.');
+    try {
+        const configs = {};
+        
+        ['nombre','direccion','tel','email','ig','fb', 'descEfectivo'].forEach(k => {
+            const el = document.getElementById('cfg-'+k);
+            if (el) configs[k] = el.value;
+        });
+        
+        // Guardar los 10 colores
+        configs.bg = document.getElementById('cfg-bg').value;
+        configs.surface = document.getElementById('cfg-surface').value;
+        configs.color2 = document.getElementById('cfg-c2').value;
+        configs.text = document.getElementById('cfg-text').value;
+        configs.muted = document.getElementById('cfg-muted').value;
+        configs.hText = document.getElementById('cfg-h-text').value;
+        configs.color1 = document.getElementById('cfg-c1').value;
+        configs.btnText = document.getElementById('cfg-btn-text').value;
+        configs.success = document.getElementById('cfg-success').value;
+        configs.alert = document.getElementById('cfg-alert').value;
+        
+        // Inyectamos todas las claves en SQLite a través del DAO
+        for (const [clave, valor] of Object.entries(configs)) {
+            if (valor !== undefined) {
+                store.dao.guardarConfiguracion(clave, valor);
+            }
+        }
+        
+        store.loadDB(); // Sincroniza SQLite -> RAM
+        window.aplicarColores();
+        window.showToast('Configuración guardada en la base de datos.');
+    } catch (error) {
+        console.error("Error al guardar config:", error);
+        window.showToast('Fallo al guardar configuración', 'error');
+    }
 };
 
 window.elegirCarpetaGuardado = async function() {
     try {
-        // Invocación del puente IPC de Electron definido en store.js
         await store.elegirCarpetaGuardado(function(rutaAsignada) {
             const inputRuta = document.getElementById('ruta-guardado'); 
             if (inputRuta) {
                 inputRuta.innerText = `Carpeta vinculada: ${rutaAsignada}`;
             }
             
-            if(!store.db.config) store.db.config = {};
-            store.db.config.carpetaNombre = rutaAsignada;
-            store.saveDB();
+            store.dao.guardarConfiguracion('carpetaNombre', rutaAsignada);
+            store.loadDB();
             
             window.showToast('Directorio de guardado vinculado con éxito');
         });
@@ -158,7 +180,8 @@ window.exportarDatos = function() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(store.db));
     const a = document.createElement('a');
     a.href = dataStr;
-    a.download = `LibrePOS_Backup_${store.now().slice(0,10)}.json`;
+    const fecha = store.now().slice(0, 10); // Restaurado al reloj local
+    a.download = `LibrePOS_Backup_${fecha}.json`;
     a.click();
 };
 
@@ -171,7 +194,7 @@ window.importarDatos = function(event) {
             const importedDB = JSON.parse(e.target.result);
             if (importedDB && importedDB.productos) {
                 store.db = importedDB;
-                store.saveDB();
+                /* store.saveDB() removido */
                 window.showToast('Restaurado con éxito. Reiniciando...');
                 setTimeout(() => location.reload(), 1500);
             }
@@ -187,17 +210,17 @@ window.cargarInputsConfig = function() {
         if(document.getElementById('cfg-'+k)) document.getElementById('cfg-'+k).value = store.db.config[k] || '';
     });
     
-    // Cargar los 10 colores
-    if (store.db.config.bg) document.getElementById('cfg-bg').value = store.db.config.bg;
-    if (store.db.config.surface) document.getElementById('cfg-surface').value = store.db.config.surface;
-    if (store.db.config.color2) document.getElementById('cfg-c2').value = store.db.config.color2;
-    if (store.db.config.text) document.getElementById('cfg-text').value = store.db.config.text;
-    if (store.db.config.muted) document.getElementById('cfg-muted').value = store.db.config.muted;
-    if (store.db.config.hText) document.getElementById('cfg-h-text').value = store.db.config.hText;
-    if (store.db.config.color1) document.getElementById('cfg-c1').value = store.db.config.color1;
-    if (store.db.config.btnText) document.getElementById('cfg-btn-text').value = store.db.config.btnText;
-    if (store.db.config.success) document.getElementById('cfg-success').value = store.db.config.success;
-    if (store.db.config.alert) document.getElementById('cfg-alert').value = store.db.config.alert;
+    // Cargar los 10 colores con fallback a defaultColors si están vacíos en la BD
+    if (document.getElementById('cfg-bg')) document.getElementById('cfg-bg').value = store.db.config.bg || defaultColors.bg;
+    if (document.getElementById('cfg-surface')) document.getElementById('cfg-surface').value = store.db.config.surface || defaultColors.surface;
+    if (document.getElementById('cfg-c2')) document.getElementById('cfg-c2').value = store.db.config.color2 || defaultColors.color2;
+    if (document.getElementById('cfg-text')) document.getElementById('cfg-text').value = store.db.config.text || defaultColors.text;
+    if (document.getElementById('cfg-muted')) document.getElementById('cfg-muted').value = store.db.config.muted || defaultColors.muted;
+    if (document.getElementById('cfg-h-text')) document.getElementById('cfg-h-text').value = store.db.config.hText || defaultColors.hText;
+    if (document.getElementById('cfg-c1')) document.getElementById('cfg-c1').value = store.db.config.color1 || defaultColors.color1;
+    if (document.getElementById('cfg-btn-text')) document.getElementById('cfg-btn-text').value = store.db.config.btnText || defaultColors.btnText;
+    if (document.getElementById('cfg-success')) document.getElementById('cfg-success').value = store.db.config.success || defaultColors.success;
+    if (document.getElementById('cfg-alert')) document.getElementById('cfg-alert').value = store.db.config.alert || defaultColors.alert;
     
     if (store.db.config.logo) {
         document.getElementById('cfg-logo-preview').innerHTML = `<img src="${store.db.config.logo}" style="max-height:60px; border-radius:5px; border: 1px solid var(--border);">`;

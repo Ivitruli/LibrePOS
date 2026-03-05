@@ -5,11 +5,11 @@ const finanzas = require('./finanzas.js');
 const clientes = require('./clientes.js');
 
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtQty = (n, u) => u === 'kg' ? Number(n).toFixed(3) + ' kg' : u === '100g' ? Number(n).toFixed(1) + '×100g' : u === 'combo' ? Number(n).toFixed(0) + ' promo' : Number(n).toFixed(0) + ' u.';
+const fmtQty = (n, u) => u === 'kg' ? Number(n).toFixed(3) + ' kg' : u === 'combo' ? Number(n).toFixed(0) + ' promo' : Number(n).toFixed(0) + ' u.';
 
 let barcodeTimer = null;
 
-window.handleBarcodeInput = function() {
+window.handleBarcodeInput = function () {
     clearTimeout(barcodeTimer);
     const val = document.getElementById('pos-barcode').value.trim();
     barcodeTimer = setTimeout(() => {
@@ -32,219 +32,258 @@ window.addEventListener('keydown', e => {
     }
 });
 
-window.selectMedio = function(id, btn) {
+window.selectMedio = function (id, btn) {
     store.medioSeleccionado = id;
     document.querySelectorAll('.medio-btn').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     window.renderCarrito();
 };
 
-window.toggleCartCosto = function() {
+window.toggleCartCosto = function () {
     const isCostoChecked = document.getElementById('cart-venta-costo')?.checked;
-    store.carrito.forEach(i => { if(!i.isPromo) i.precioVenta = inventario.getPrecioCart(i.productoId, isCostoChecked); });
+    store.carrito.forEach(i => { if (!i.isPromo) i.precioVenta = inventario.getPrecioCart(i.productoId, isCostoChecked); });
     window.renderCarrito();
 };
 
-window.abrirModalQty = function(productoId) {
+window.abrirModalQty = function (productoId) {
     const prod = store.db.productos.find(p => p.id === productoId);
     const stock = inventario.getStock(productoId);
     if (stock <= 0) return window.showToast('Sin stock: ' + prod.nombre, 'error');
+
+    if (prod.unidad === 'unidad') {
+        const isCostoChecked = document.getElementById('cart-venta-costo')?.checked;
+        const ex = store.carrito.find(c => c.productoId === prod.id && !c.isPromo);
+        if (ex) {
+            ex.cantidad += 1;
+        } else {
+            store.carrito.push({
+                productoId: prod.id, nombre: prod.nombre, unidad: prod.unidad,
+                cantidad: 1, precioVenta: inventario.getPrecioCart(prod.id, isCostoChecked),
+                isPromo: false
+            });
+        }
+        window.renderCarrito();
+        const barcodeInput = document.getElementById('pos-barcode');
+        if (barcodeInput) barcodeInput.focus();
+        return;
+    }
+
     store.selectedProductId = productoId;
     document.getElementById('modal-qty-title').textContent = prod.nombre;
-    document.getElementById('modal-qty-label').textContent = prod.unidad === 'kg' ? 'Cantidad (kg)' : prod.unidad === '100g' ? 'Cantidad (×100g)' : 'Cantidad (unidades)';
+    document.getElementById('modal-qty-label').textContent = prod.unidad === 'kg' ? 'Cantidad (kg)' : 'Cantidad';
     const inp = document.getElementById('modal-qty-input');
-    inp.value = prod.unidad === 'unidad' ? '1' : ''; inp.step = prod.unidad === 'unidad' ? '1' : '0.001';
+    inp.value = ''; inp.step = '0.001';
     document.getElementById('modal-stock-info').textContent = 'Stock disponible: ' + fmtQty(stock, prod.unidad);
     document.getElementById('modal-qty').classList.add('open');
     setTimeout(() => inp.select(), 60);
 };
 
-window.cerrarModalQty = function() {
+window.cerrarModalQty = function () {
     document.getElementById('modal-qty').classList.remove('open');
     store.selectedProductId = null;
 };
 
-window.confirmarAgregarCarrito = function() {
+window.confirmarAgregarCarrito = function () {
     const qty = parseFloat(document.getElementById('modal-qty-input').value);
     if (!qty || qty <= 0) return;
     const prod = store.db.productos.find(p => p.id === store.selectedProductId);
     if (qty > inventario.getStock(prod.id) + 0.001) return window.showToast('Stock insuficiente', 'error');
     const ex = store.carrito.find(c => c.productoId === prod.id && !c.isPromo);
     const isCostoChecked = document.getElementById('cart-venta-costo')?.checked;
-    
-    if (ex) ex.cantidad += qty; 
-    else store.carrito.push({ productoId: prod.id, nombre: prod.nombre, unidad: prod.unidad, cantidad: qty, precioVenta: inventario.getPrecioCart(prod.id, isCostoChecked), isPromo: false }); 
-    
+
+    if (ex) ex.cantidad += qty;
+    else store.carrito.push({ productoId: prod.id, nombre: prod.nombre, unidad: prod.unidad, cantidad: qty, precioVenta: inventario.getPrecioCart(prod.id, isCostoChecked), isPromo: false });
+
     window.cerrarModalQty();
     window.renderCarrito();
     document.getElementById('pos-barcode').focus();
 };
 
-window.agregarPromoCarrito = function(promoId) {
+window.agregarPromoCarrito = function (promoId) {
     const promo = (store.db.promociones || []).find(p => p.id === promoId);
     if (!promo) return;
-    
+
     for (const sub of promo.items) {
         if (inventario.getStock(sub.id) < sub.cantidad) return window.showToast(`Stock insuficiente de ${sub.nombre} para armar la promo`, 'error');
     }
-    
+
     const ex = store.carrito.find(c => c.productoId === promo.id && c.isPromo);
     if (ex) ex.cantidad += 1;
     else store.carrito.push({ productoId: promo.id, nombre: "⭐ " + promo.nombre, unidad: 'combo', cantidad: 1, precioVenta: promo.precioPromo, isPromo: true, items: promo.items });
-    
+
     window.renderCarrito();
     window.showToast('Promo agregada al carrito');
 };
 
-window.uiAplicarDescuentoManual = function() {
+window.uiAplicarDescuentoManual = function () {
     const val = document.getElementById('pos-desc-manual').value;
     posManager.aplicarDescuentoExtra(val);
     window.uiActualizarTotalPOS();
 };
 
-window.confirmarVenta = function() {
-    if (!store.carrito.length) return;
-    const chkEnvio = document.getElementById('chkEnvio').checked;
-    const inputEnvio = document.getElementById('inputCostoEnvio');
-    const valorInput = chkEnvio ? inputEnvio.value : null;
-    
-    const isFiado = document.getElementById('chkCtaCte')?.checked || false;
-    const clienteId = document.getElementById('pos-cliente')?.value;
+window.confirmarVenta = function () {
+    if (!store.carrito || store.carrito.length === 0) return window.showToast('El carrito está vacío', 'error');
 
-    if (isFiado && !clienteId) return window.showToast('Debe seleccionar un cliente para vender a Cuenta Corriente', 'error');
+    // 1. Validaciones y captura de interfaz
+    const isFiado = document.getElementById('chkCtaCte') && document.getElementById('chkCtaCte').checked;
+    const clienteId = isFiado ? document.getElementById('pos-cliente')?.value : null;
 
-    const calculo = posManager.calcularTotal(chkEnvio, valorInput, isFiado);
-    const subtotalSinEnvio = calculo.totalFinal - calculo.envio;
+    if (isFiado && !clienteId) return window.showToast('Seleccione un cliente para fiar', 'error');
 
-    let costoTotalEstimado = 0;
-    // CORRECCIÓN: Pre-validación acumulativa para evitar crash en consumo cruzado
-        let stockRequerido = {};
-        for (const i of store.carrito) {
-            if (i.isPromo) {
-                for (const sub of i.items) {
-                    stockRequerido[sub.id] = (stockRequerido[sub.id] || 0) + (sub.cantidad * i.cantidad);
-                }
-            } else {
-                stockRequerido[i.productoId] = (stockRequerido[i.productoId] || 0) + i.cantidad;
-            }
+    // Si es fiado, la plata va a la cuenta virtual. Si no, a la caja seleccionada.
+    const cuentaDestino = isFiado ? 'cta_cte' : store.medioSeleccionado;
+    if (!cuentaDestino) return window.showToast('Seleccione un medio de pago', 'error');
+
+    const isEnvio = document.getElementById('chkEnvio') && document.getElementById('chkEnvio').checked;
+    const costoEnvio = isEnvio ? (parseFloat(document.getElementById('inputCostoEnvio')?.value) || 0) : 0;
+
+    // 2. Preparar el lote de la transacción
+    const ventaId = 'v_' + Date.now().toString() + Math.random().toString(36).substr(2, 5);
+    const timestamp = store.now();
+    const fecha = timestamp.slice(0, 10);
+
+    let totalCosto = 0;
+    const lotesConsumidos = [];
+    const itemsTransaccion = [];
+
+    // Clonamos los lotes temporalmente para simular el PEPS.
+    const lotesSimulados = JSON.parse(JSON.stringify(store.db.lotes));
+
+    // 3. Motor PEPS (Primeras Entradas, Primeras Salidas)
+    for (const item of store.carrito) {
+        let cantRequerida = parseFloat(item.cantidad);
+        let costoCMV = 0;
+
+        const lotesDelProducto = lotesSimulados
+            .filter(l => l.productoId === item.productoId && l.cantDisponible > 0)
+            .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+        for (const lote of lotesDelProducto) {
+            if (cantRequerida <= 0) break;
+            const aDescontar = Math.min(lote.cantDisponible, cantRequerida);
+
+            lotesConsumidos.push({ loteId: lote.id, cantidad: aDescontar });
+
+            costoCMV += (aDescontar * lote.costoUnit);
+            cantRequerida -= aDescontar;
+            lote.cantDisponible -= aDescontar;
         }
-        
-        for (const [pId, reqQty] of Object.entries(stockRequerido)) {
-            if (reqQty > inventario.getStock(pId) + 0.001) {
-                const pNombre = store.db.productos.find(x => x.id === pId)?.nombre || 'Producto';
-                throw new Error(`Stock global insuficiente. Se requieren ${reqQty.toFixed(2)} unidades de "${pNombre}" en total para esta venta.`);
-            }
+
+        // INTEGRIDAD ACID: Bloqueo de venta si falta stock físico
+        if (cantRequerida > 0.001) {
+            return window.showToast(`Stock físico insuficiente para: ${item.nombre}. Faltan ${cantRequerida.toFixed(2)} u.`, 'error');
         }
 
-    if (subtotalSinEnvio < costoTotalEstimado) {
-        if (!confirm(`⚠️ ALERTA DE PÉRDIDA\n\nEl precio final de los productos ($${subtotalSinEnvio.toFixed(2)}) es MENOR al costo de la mercadería ($${costoTotalEstimado.toFixed(2)}).\n\n¿Estás seguro de querer registrar esta venta a pérdida?`)) {
-            return;
-        }
+        totalCosto += costoCMV;
+
+        itemsTransaccion.push({
+            productoId: item.productoId,
+            nombre: item.nombre,
+            unidad: item.unidad || 'u',
+            cantidad: item.cantidad,
+            precioVenta: item.precioFinal || item.precioVenta || item.precio,
+            costoTotal: costoCMV,
+            isPromo: item.isPromo ? 1 : 0
+        });
     }
 
-    const ts = store.now();
-    const vId = Date.now().toString();
-    let totV = 0, totC = 0, items = [];
-    
+    // 4. Captura exacta utilizando el motor matemático (Evita errores de formato de texto)
+    const calculoMatematico = posManager.calcularTotal(isEnvio, costoEnvio, isFiado);
+    const totalVenta = calculoMatematico.totalFinal;
+    const descUI = calculoMatematico.descEfectivo;
+
+    const ventaData = {
+        id: ventaId,
+        timestamp: timestamp,
+        fecha: fecha,
+        totalVenta: totalVenta,
+        totalCosto: totalCosto,
+        cuentaId: cuentaDestino,
+        medioPago: isFiado ? 'Cuenta Corriente' : (store.db.cuentas.find(c => c.id === cuentaDestino)?.nombre || ''),
+        descEfectivo: descUI,
+        descRedondeo: typeof posManager !== 'undefined' ? (posManager.descuentoManualRedondeo || 0) : 0,
+        costoEnvio: costoEnvio,
+        envioPagado: isEnvio,
+        facturada: false
+    };
+
+    // 5. Ejecución Transaccional (SQLite)
     try {
-        if (isFiado) {
-            clientes.registrarDeuda(clienteId, subtotalSinEnvio, 'Compra en POS', ts.slice(0, 10), vId);
+        store.dao.registrarVentaTransaccional(ventaData, itemsTransaccion, lotesConsumidos);
+
+        // 6. Vinculación temporal de Deuda de Cliente
+        if (isFiado && clienteId && typeof clientes !== 'undefined' && clientes.registrarDeuda) {
+            clientes.registrarDeuda(clienteId, totalVenta, 'Ticket: ' + ventaId.substring(0, 8), fecha, ventaId);
         }
 
-        for (const i of store.carrito) {
-            if (i.isPromo) {
-                for (const sub of i.items) if (inventario.getStock(sub.id) < (sub.cantidad * i.cantidad) - 0.001) throw new Error(`Stock insuficiente para armar promo: ${sub.nombre}`);
-            } else {
-                if (i.cantidad > inventario.getStock(i.productoId) + 0.001) throw new Error('Stock falto: ' + i.nombre);
-            }
+        store.loadDB();
+
+        // Limpiar Interfaz
+        if (typeof posManager !== 'undefined' && posManager.limpiar) posManager.limpiar();
+        if (typeof window.uiActualizarTotalPOS === 'function') window.uiActualizarTotalPOS();
+
+        const cartDiv = document.getElementById('cart-items');
+        if (cartDiv) cartDiv.innerHTML = '<div class="p-1 text-center text-muted">Seleccioná productos</div>';
+
+        const modal = document.getElementById('modal-venta');
+        if (modal) {
+            modal.classList.add('open');
+            const res = document.getElementById('resumen-venta');
+            if (res) res.innerHTML = `<h3 class="text-green text-center" style="font-size:2rem; margin:1rem 0;">${fmt(totalVenta)}</h3>`;
+        } else {
+            window.showToast('Venta registrada con éxito');
         }
 
-        for (const i of store.carrito) {
-            if (i.isPromo) {
-                let costoTotalPromo = 0;
-                for (const sub of i.items) {
-                    const { costoTotal } = inventario.consumirPEPS(sub.id, sub.cantidad * i.cantidad);
-                    costoTotalPromo += costoTotal;
-                }
-                const sub = i.cantidad * i.precioVenta; totV += sub; totC += costoTotalPromo;
-                store.db.ventaItems.push({ ventaId: vId, productoId: i.productoId, nombre: i.nombre, unidad: 'combo', cantidad: i.cantidad, precioVenta: i.precioVenta, costoTotal: costoTotalPromo, isPromo: true, items: i.items });
-                items.push({ nombre: i.nombre, q: i.cantidad, u: 'combo', s: sub });
-            } else {
-                const { costoTotal } = inventario.consumirPEPS(i.productoId, i.cantidad);
-                const sub = i.cantidad * i.precioVenta; totV += sub; totC += costoTotal;
-                store.db.ventaItems.push({ ventaId: vId, productoId: i.productoId, nombre: i.nombre, unidad: i.unidad, cantidad: i.cantidad, precioVenta: i.precioVenta, costoTotal, isPromo: false });
-                items.push({ nombre: i.nombre, q: i.cantidad, u: i.unidad, s: sub });
-            }
-        }
-        
-        const c = isFiado ? { id: 'cta_cte', nombre: 'Cuenta Corriente' } : store.db.cuentas.find(x => x.id === store.medioSeleccionado);
-        
-        store.db.ventas.push({ id: vId, timestamp: ts, fecha: ts.slice(0, 10), totalVenta: subtotalSinEnvio, totalCosto: totC, cuentaId: c.id, medioPago: c.nombre, descEfectivo: calculo.descEfectivo, descRedondeo: calculo.descRedondeo, costoEnvio: calculo.envio, envioPagado: false, facturada: false });
-        
-        if (calculo.envio > 0 && !isFiado) {
-            store.db.ajustesCaja.push({ id: Date.now().toString() + '_envio_in', cuentaId: c.id, fecha: ts.slice(0, 10), diferencia: calculo.envio, tipo: 'ingreso', concepto: 'Cobro de Envío al cliente' });
-        }
-        
-        if (calculo.descRedondeo > 0) finanzas.registrarGasto(ts.slice(0, 10), 'Otros', 'variable', calculo.descRedondeo, isFiado ? 'cta_cte' : c.id, 'Redondeo POS');
-        if (calculo.descExtra > 0) finanzas.registrarGasto(ts.slice(0, 10), 'Otros', 'variable', calculo.descExtra, isFiado ? 'cta_cte' : c.id, 'Descuento Manual POS');
-        
-        store.saveDB();
-        if (typeof window.populateSelects === 'function') window.populateSelects();
-        
-        let msjFiado = isFiado ? `<div style="background:var(--amber-light);color:var(--amber);padding:5px;text-align:center;font-weight:bold;margin-bottom:10px;">Fiado a: ${store.db.clientes.find(x=>x.id===clienteId)?.nombre}</div>` : '';
-        
-        document.getElementById('resumen-venta').innerHTML = `${msjFiado}<table style="width:100%;font-size:.82rem;margin-bottom:.8rem;">${items.map(r => `<tr><td>${r.nombre}</td><td class="mono" align="right">${fmtQty(r.q, r.u)}</td><td class="mono" align="right">${fmt(r.s)}</td></tr>`).join('')}</table><div style="font-size:1.4rem;font-weight:900;border-top:2px solid #ccc;padding-top:.5rem;">Total: ${fmt(calculo.totalFinal)}</div>`;
-        document.getElementById('modal-venta').classList.add('open');
-        posManager.limpiar();
-        window.renderCarrito();
-        window.renderProductGrid();
-        if(typeof window.renderTablaClientes === 'function') window.renderTablaClientes();
-    } catch (e) { window.showToast(e.message, 'error'); }
+    } catch (error) {
+        console.error("Rollback ejecutado. Error SQLite:", error);
+        store.loadDB();
+        window.showToast('Error crítico: Venta revertida. ' + error.message, 'error');
+    }
 };
 
-window.cerrarModalVenta = function() {
+window.cerrarModalVenta = function () {
     document.getElementById('modal-venta').classList.remove('open');
     document.getElementById('pos-barcode').focus();
 };
 
-window.cambiarQtyCarrito = function(i, d) {
+window.cambiarQtyCarrito = function (i, d) {
     const item = store.carrito[i];
     const s = (item.unidad === 'unidad' || item.unidad === 'combo') ? 1 : .1;
     item.cantidad = Math.max(s, item.cantidad + d * s);
     window.renderCarrito();
 };
 
-window.setQtyCarrito = function(i, v) {
+window.setQtyCarrito = function (i, v) {
     store.carrito[i].cantidad = parseFloat(v) || .001;
     window.renderCarrito();
 };
 
-window.quitarDeCarrito = function(i) {
+window.quitarDeCarrito = function (i) {
     store.carrito.splice(i, 1);
     window.renderCarrito();
 };
 
-window.limpiarCarrito = function() {
+window.limpiarCarrito = function () {
     posManager.limpiar();
     window.renderCarrito();
 };
 
-window.uiActualizarTotalPOS = function() {
+window.uiActualizarTotalPOS = function () {
     const chkEnvio = document.getElementById('chkEnvio').checked;
     const inputEnvio = document.getElementById('inputCostoEnvio');
     inputEnvio.style.display = chkEnvio ? 'block' : 'none';
-    
+
     const isFiado = document.getElementById('chkCtaCte')?.checked || false;
-    
+
     const calculo = posManager.calcularTotal(chkEnvio, chkEnvio ? inputEnvio.value : null, isFiado);
-    
+
     document.getElementById('btnRedondeo').innerText = `Redondear (Sug: -$${calculo.sugerido})`;
-    
+
     const descuentoTotalAplicado = calculo.descRedondeo + calculo.descExtra;
     document.getElementById('lblDescuentoAplicado').innerText = `-$${descuentoTotalAplicado.toFixed(2)}`;
-    
-    if (chkEnvio && inputEnvio.value === '') inputEnvio.value = calculo.envio; 
-    
+
+    if (chkEnvio && inputEnvio.value === '') inputEnvio.value = calculo.envio;
+
     if (calculo.descEfectivo > 0 && !isFiado) {
         document.getElementById('cart-desc-row').style.display = 'block';
         document.getElementById('cart-desc-row').textContent = `💵 Descuento (Excl. Promos): −${fmt(calculo.descEfectivo)}`;
@@ -254,24 +293,24 @@ window.uiActualizarTotalPOS = function() {
         document.getElementById('cart-desc-row').style.display = 'none';
         document.getElementById('cart-total-sin-desc-row').style.display = 'none';
     }
-    document.getElementById('cart-total').innerText = `$${calculo.totalFinal.toFixed(2)}`; 
+    document.getElementById('cart-total').innerText = `$${calculo.totalFinal.toFixed(2)}`;
 };
 
-window.uiAplicarRedondeo = function() {
+window.uiAplicarRedondeo = function () {
     const chk = document.getElementById('chkEnvio').checked;
     const isFiado = document.getElementById('chkCtaCte')?.checked || false;
     posManager.aplicarRedondeo(posManager.calcularTotal(chk, null, isFiado).sugerido);
     window.uiActualizarTotalPOS();
 };
 
-window.renderCarrito = function() {
+window.renderCarrito = function () {
     const c = document.getElementById('cart-items');
     if (!store.carrito.length) {
         c.innerHTML = '<div style="padding:2rem 1rem;text-align:center;color:var(--muted);font-size:.82rem;">Seleccioná productos</div>';
         document.getElementById('cart-total').textContent = '$0';
         return;
     }
-    
+
     // CORRECCIÓN: Estructura HTML del ítem del carrito para mantener todo en línea y optimizar espacio
     c.innerHTML = store.carrito.map((i, idx) => `
         <div class="cart-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; border-bottom: 1px dashed var(--border);">
@@ -282,7 +321,7 @@ window.renderCarrito = function() {
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="display: flex; align-items: center; background: var(--surface2); border-radius: 4px; padding: 2px;">
                     <button class="qty-btn" onclick="cambiarQtyCarrito(${idx},-1)" style="width: 20px; height: 20px; padding: 0; display: flex; align-items: center; justify-content: center;">−</button>
-                    <input type="number" class="mono" value="${i.cantidad}" onchange="setQtyCarrito(${idx},this.value)" style="width:40px; text-align:center; padding:0; margin:0; border:none; background:transparent; font-size: 0.75rem;" ${i.isPromo?'readonly':''}>
+                    <input type="number" class="mono" value="${i.cantidad}" onchange="setQtyCarrito(${idx},this.value)" style="width:40px; text-align:center; padding:0; margin:0; border:none; background:transparent; font-size: 0.75rem;" ${i.isPromo ? 'readonly' : ''}>
                     <button class="qty-btn" onclick="cambiarQtyCarrito(${idx},1)" style="width: 20px; height: 20px; padding: 0; display: flex; align-items: center; justify-content: center;">+</button>
                 </div>
                 <div class="mono" style="font-size:.8rem; font-weight: 600; width: 60px; text-align: right;">${fmt(i.cantidad * i.precioVenta)}</div>
@@ -290,11 +329,11 @@ window.renderCarrito = function() {
             </div>
         </div>
     `).join('');
-    
+
     window.uiActualizarTotalPOS();
 };
 
-window.renderProductGrid = function() {
+window.renderProductGrid = function () {
     const f = (document.getElementById('pos-search').value || '').toLowerCase();
     let ps = store.db.productos.filter(p => !p.deleted);
     if (f) ps = ps.filter(p => p.nombre.toLowerCase().includes(f) || p.barcode?.includes(f) || p.codigo?.toLowerCase().includes(f));
@@ -304,7 +343,7 @@ window.renderProductGrid = function() {
     }).join('');
 };
 
-window.renderPromosActivasPOS = function() {
+window.renderPromosActivasPOS = function () {
     const container = document.getElementById('pos-promos-container');
     if (!container) return;
     const promos = (store.db.promociones || []).filter(p => p.activa);
@@ -319,7 +358,7 @@ window.renderPromosActivasPOS = function() {
     `).join('');
 };
 
-window.filterProducts = function() {
+window.filterProducts = function () {
     window.renderProductGrid();
 };
 
@@ -327,6 +366,6 @@ setTimeout(() => {
     if (typeof window.renderPromosActivasPOS === 'function') window.renderPromosActivasPOS();
     if (typeof window.renderProductGrid === 'function') window.renderProductGrid();
     if (typeof window.renderCarrito === 'function') window.renderCarrito();
-}, 150); 
+}, 150);
 
 module.exports = {};

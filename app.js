@@ -15,7 +15,7 @@ require('./ui_config.js');
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = () => store.now().slice(0, 10);
 
-window.showToast = function(msg, type = 'success') {
+window.showToast = function (msg, type = 'success') {
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.className = 'show ' + type;
@@ -23,12 +23,12 @@ window.showToast = function(msg, type = 'success') {
 };
 
 // ================= NAVEGACIÓN Y CONFIGURACIÓN =================
-window.showSection = function(id, btn) {
+window.showSection = function (id, btn) {
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
     document.getElementById('sec-' + id).classList.add('active');
     if (btn) btn.classList.add('active');
-    
+
     if (id === 'pos') { window.renderProductGrid(); setTimeout(() => document.getElementById('pos-barcode').focus(), 80); }
     if (id === 'stock') window.renderTablaProductos();
     if (id === 'ventas') window.renderTablaVentas();
@@ -47,25 +47,25 @@ window.showSection = function(id, btn) {
     if (id === 'config') window.cargarInputsConfig();
 };
 
-window.showProvTab = function(id, btn) {
+window.showProvTab = function (id, btn) {
     document.querySelectorAll('.prov-tab').forEach(t => t.style.display = 'none');
     document.querySelectorAll('#sec-proveedores .tab-pill').forEach(b => b.classList.remove('active'));
     document.getElementById('prov-' + id).style.display = 'block';
     btn.classList.add('active');
 };
 
-window.showInfTab = function(id, btn) {
+window.showInfTab = function (id, btn) {
     document.querySelectorAll('.inf-tab').forEach(t => t.style.display = 'none');
     document.querySelectorAll('#sec-informes .tab-pill').forEach(b => b.classList.remove('active'));
     document.getElementById('inf-' + id).style.display = 'block';
     btn.classList.add('active');
 };
 
-window.populateSelects = function() {
+window.populateSelects = function () {
     // 1. Proveedores (excluyendo eliminados)
     const provs = '<option value="">— Seleccionar —</option>' + store.db.proveedores.filter(p => !p.deleted).map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
     document.querySelectorAll('#np-proveedor, #ep-prod-proveedor, #deuda-prov, #comp-proveedor').forEach(s => { const val = s.value; s.innerHTML = provs; s.value = val; });
-    
+
     // 2. Cuentas y Saldos
     const ctasActivas = store.db.cuentas.filter(c => !c.deleted);
     const ctas = ctasActivas.map(c => `<option value="${c.id}">${c.nombre} (${fmt(finanzas.calcSaldoCuenta(c.id))})</option>`).join('');
@@ -78,7 +78,7 @@ window.populateSelects = function() {
         cobroCuenta.innerHTML = ctas + '<option value="incobrable" style="color:var(--accent);font-weight:bold;">❌ Desestimar Deuda (Pasar a Pérdida)</option>';
         cobroCuenta.value = valCobro || (ctasActivas[0]?.id || '');
     }
-    
+
     // 4. Socios
     const socs = '<option value="">— Seleccionar —</option>' + store.db.socios.filter(s => !s.deleted).map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
     document.querySelectorAll('#mov-socio, #rs-socio').forEach(s => { const val = s.value; s.innerHTML = socs; s.value = val; });
@@ -91,13 +91,13 @@ window.populateSelects = function() {
         posClienteSelect.innerHTML = clientesDropdown;
         posClienteSelect.value = val;
     }
-    
+
     // 6. Medios de Pago en POS (Restauración)
     const mediosBtns = document.getElementById('medios-pago-btns');
     if (mediosBtns) {
         mediosBtns.innerHTML = ctasActivas.map(c => `<button class="medio-btn${c.id === store.medioSeleccionado ? ' selected' : ''}" onclick="window.selectMedio('${c.id}',this)">${c.nombre}</button>`).join('');
     }
-    
+
     const ventFiltroMedio = document.getElementById('vent-filtro-medio');
     if (ventFiltroMedio) {
         ventFiltroMedio.innerHTML = '<option value="">Todas</option>' + ctasActivas.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
@@ -107,7 +107,8 @@ window.populateSelects = function() {
 // INIT GLOBAL
 if (typeof window.aplicarColores === 'function') window.aplicarColores();
 window.populateSelects();
-['comp','gasto','deuda','mov', 'cobro'].forEach(p => {
+['comp', 'gasto', 'deuda', 'mov', 'cobro'].forEach(p => {
     const el = document.getElementById(`${p}-fecha`);
-    if(el) el.value = today();
+    if (el) el.value = today();
 });
+

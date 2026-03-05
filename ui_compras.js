@@ -51,7 +51,7 @@ window.buscarProdCompra = function() {
 function _seleccionarProd(prod) {
     document.getElementById('comp-prod-nombre').value = prod.nombre + (prod.marca ? ' (' + prod.marca + ')' : '');
     document.getElementById('comp-prod-id').value = prod.id;
-    document.getElementById('comp-cantidad').focus();
+    document.getElementById('comp-bultos').focus();
 }
 
 window.guardarNuevoProd = function() {
@@ -71,22 +71,37 @@ window.guardarNuevoProd = function() {
     let exist = store.db.productos.find(p => p.codigo === codigo || p.barcode === codigo);
     if (exist && !exist.deleted) return window.showToast('Código ya existe en un producto activo', 'error');
     
-    let pId;
-    if (exist && exist.deleted) {
-        exist.deleted = false; exist.nombre = nombre; exist.marca = marca; exist.unidad = unidad; pId = exist.id;
-    } else {
-        pId = Date.now().toString();
-        store.db.productos.push({ id: pId, codigo, barcode: codigo, nombre, marca, unidad, deleted: false });
+    let pId = (exist && exist.deleted) ? exist.id : Date.now().toString();
+    
+    try {
+        // Ejecución de transacciones separadas pero síncronas
+        store.dao.guardarProducto({
+            id: pId,
+            codigo: codigo,
+            barcode: codigo,
+            nombre: nombre,
+            marca: marca,
+            unidad: unidad,
+            deleted: false
+        });
+
+        store.dao.guardarPoliticaPrecio(pId, {
+            fijo: 0, imp: 0, gan: 30, desc: 0, alCosto: false, precioImpreso: 0
+        });
+
+        // Sincronización RAM -> SQLite
+        store.loadDB();
+        
+        // Limpieza y foco de Interfaz
+        document.getElementById('modal-np').classList.remove('open');
+        document.getElementById('comp-prod-nombre').value = nombre;
+        document.getElementById('comp-prod-id').value = pId;
+        document.getElementById('comp-barcode').value = codigo;
+        document.getElementById('comp-bultos').focus();
+        
+    } catch (error) {
+        window.showToast(error.message, 'error');
     }
-    
-    if (!store.db.preciosExtra[pId]) store.db.preciosExtra[pId] = { fijo: 0, imp: 0, gan: 30, desc: 0, alCosto: false, precioImpreso: 0 };
-    store.saveDB();
-    
-    document.getElementById('modal-np').classList.remove('open');
-    document.getElementById('comp-prod-nombre').value = nombre;
-    document.getElementById('comp-prod-id').value = pId;
-    document.getElementById('comp-barcode').value = codigo;
-    document.getElementById('comp-cantidad').focus();
 };
 
 window.calcCostoUnitarioCompra = function() {
@@ -159,7 +174,7 @@ window.confirmarRemitoCompleto = function() {
             document.getElementById('comp-pago').value,
             document.getElementById('comp-cuenta').value
         );
-        store.saveDB();
+        /* store.saveDB() removido */
         if (typeof window.populateSelects === 'function') window.populateSelects();
         window.showToast('Remito registrado con éxito');
         

@@ -61,7 +61,7 @@ window.confirmarVentaHistorica = function() {
             esHistorica: true 
         });
 
-        store.saveDB();
+        /* store.saveDB() removido */
         window.showToast('Ingreso atrasado registrado con éxito');
         window.cerrarModalVentaHistorica();
         

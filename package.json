@@ -20,5 +20,9 @@
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
     "madge": "^8.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "jsbarcode": "^3.12.3"
   }
 }

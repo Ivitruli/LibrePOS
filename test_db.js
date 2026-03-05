@@ -1,0 +1,1 @@
+const { app } = require('electron'); app.whenReady().then(() => { global.localStorage = { getItem: () => null, setItem: () => {} }; try { const store = require('./store.js'); const finanzas = require('./finanzas.js'); finanzas.crearCuenta('Prueba Test', 500); console.log('SUCCESS_CREATED_ACCOUNT'); } catch(e) { console.error('FAIL_CREATED_ACCOUNT:', e); } app.quit(); });

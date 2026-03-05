@@ -12,7 +12,7 @@ window.agregarCliente = function() {
             document.getElementById('cli-dir').value,
             document.getElementById('cli-limite').value
         );
-        store.saveDB();
+        /* store.saveDB() removido */
         window.renderTablaClientes();
         if (typeof window.populateSelects === 'function') window.populateSelects();
         window.showToast('Cliente agregado exitosamente');
@@ -44,7 +44,7 @@ window.guardarEditCliente = function() {
             document.getElementById('ecli-dir').value,
             document.getElementById('ecli-limite').value
         );
-        store.saveDB();
+        /* store.saveDB() removido */
         document.getElementById('modal-edit-cliente').classList.remove('open');
         window.renderTablaClientes();
         if (typeof window.populateSelects === 'function') window.populateSelects();
@@ -56,7 +56,7 @@ window.eliminarCliente = function(id) {
     try {
         if(confirm('¿Está seguro de eliminar este cliente? El historial quedará huérfano.')) {
             clientes.eliminar(id);
-            store.saveDB();
+            /* store.saveDB() removido */
             window.renderTablaClientes();
             if (typeof window.populateSelects === 'function') window.populateSelects();
             window.showToast('Cliente eliminado');
@@ -84,7 +84,7 @@ window.confirmarCobroCliente = function() {
             document.getElementById('cobro-fecha').value,
             document.getElementById('cobro-desc').value
         );
-        store.saveDB();
+        /* store.saveDB() removido */
         document.getElementById('modal-cobro-cliente').classList.remove('open');
         window.renderTablaClientes();
         if (typeof window.renderFinanzasTotales === 'function') window.renderFinanzasTotales();

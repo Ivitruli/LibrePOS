@@ -17,20 +17,21 @@ const compras = {
         return base + verificador;
     },
 
-    registrarRemito: function(proveedorId, comprobante, fecha, items, estadoPago, cuentaId) {
+registrarRemito: function(proveedorId, comprobante, fecha, items, estadoPago, cuentaId, cargosExtra = 0) {
         if (!items || items.length === 0) {
             throw new Error('El comprobante no tiene productos asignados.');
         }
 
-        let costoTotalRemito = 0;
+        let costoTotalRemito = parseFloat(cargosExtra) || 0;
+        const lotesAInsertar = [];
 
         items.forEach(item => {
             const cant = parseFloat(item.cantidad);
             const costo = parseFloat(item.costoUnitario);
             costoTotalRemito += (cant * costo);
 
-            store.db.lotes.push({
-                id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+            lotesAInsertar.push({
+                id: 'lote_' + Date.now().toString() + Math.random().toString(36).substr(2, 5),
                 productoId: item.productoId,
                 fecha: fecha,
                 vencimiento: item.vencimiento || null,
@@ -43,14 +44,26 @@ const compras = {
             });
         });
 
-        // Corrección de bifurcación contable
-        if (estadoPago === 'adeudado' && proveedorId) {
-            proveedores.registrarDeuda(proveedorId, fecha, costoTotalRemito, 'Factura/Remito: ' + (comprobante || 'S/N'));
-        } else if (estadoPago === 'pagado' && cuentaId) {
-            finanzas.registrarGasto(fecha, 'Mercadería', 'variable', costoTotalRemito, cuentaId, 'Compra a Proveedor: ' + (comprobante || 'S/N'));
-        }
+        const datosFinancieros = {
+            estadoPago: estadoPago,
+            proveedorId: proveedorId,
+            fecha: fecha,
+            costoTotal: costoTotalRemito,
+            cuentaId: cuentaId,
+            comprobante: comprobante
+        };
 
-        return costoTotalRemito;
+        try {
+            // Disparamos la transacción ACID en SQLite
+            store.dao.registrarCompraTransaccional(lotesAInsertar, datosFinancieros);
+            
+            // Sincronizamos la RAM para que la interfaz se actualice al instante
+            store.loadDB(); 
+        } catch (error) {
+            console.error("Error en transacción de compra:", error);
+            store.loadDB(); // Limpieza de seguridad
+            throw new Error("Fallo al registrar la compra en la base de datos: " + error.message);
+        }
     }
 };
 

@@ -11,8 +11,9 @@ const clientes = {
             limiteCredito: parseFloat(limiteCredito) || 0,
             deleted: false
         };
-        if (!store.db.clientes) store.db.clientes = [];
-        store.db.clientes.push(nuevoCliente);
+        
+        store.dao.guardarCliente(nuevoCliente);
+        store.loadDB(); // Sincroniza SQLite -> RAM
     },
 
     editar: function(id, nombre, telefono, direccion, limiteCredito) {
@@ -24,6 +25,9 @@ const clientes = {
         cli.telefono = telefono ? telefono.trim() : '';
         cli.direccion = direccion ? direccion.trim() : '';
         cli.limiteCredito = parseFloat(limiteCredito) || 0;
+        
+        store.dao.guardarCliente(cli);
+        store.loadDB();
     },
 
     eliminar: function(id) {
@@ -31,14 +35,12 @@ const clientes = {
         if (!cli) throw new Error('Cliente no encontrado.');
         
         const deuda = this.getDeudaTotal(id);
-        if (deuda > 0) {
-            throw new Error(`No se puede eliminar. El cliente mantiene una deuda de $${deuda.toFixed(2)}.`);
-        }
-        if (deuda < 0) {
-            throw new Error(`No se puede eliminar. El comercio posee un saldo a favor del cliente por $${Math.abs(deuda).toFixed(2)}. Debe liquidarse antes de proceder.`);
-        }
+        if (deuda > 0) throw new Error(`No se puede eliminar. El cliente mantiene una deuda de $${deuda.toFixed(2)}.`);
+        if (deuda < 0) throw new Error(`No se puede eliminar. El comercio posee un saldo a favor del cliente por $${Math.abs(deuda).toFixed(2)}.`);
         
         cli.deleted = true;
+        store.dao.guardarCliente(cli);
+        store.loadDB();
     },
 
     getDeudaTotal: function(clienteId) {
@@ -61,16 +63,19 @@ const clientes = {
             throw new Error(`Límite de crédito excedido. Límite: $${cli.limiteCredito.toFixed(2)}, Deuda Actual: $${deudaActual.toFixed(2)}`);
         }
 
-        if (!store.db.cuentasCorrientes) store.db.cuentasCorrientes = [];
-        store.db.cuentasCorrientes.push({
+        const mov = {
             id: 'cc_' + Date.now().toString(),
             clienteId,
             tipo: 'cargo',
             monto: m,
             descripcion: descripcion || 'Compra en cuenta corriente',
-            fecha: fecha || (new Date(Date.now() - new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 10),
-            ventaId
-        });
+            fecha: fecha || store.now().slice(0, 10),
+            ventaId,
+            cuentaId: null
+        };
+
+        store.dao.registrarMovimientoCtaCte(mov);
+        store.loadDB();
     },
 
     registrarPago: function(clienteId, monto, cuentaId, fecha, descripcion) {
@@ -80,24 +85,28 @@ const clientes = {
 
         const esIncobrable = (cuentaId === 'incobrable');
         const descFinal = descripcion || (esIncobrable ? 'Deuda desestimada (Pérdida)' : 'Pago / Entrega a cuenta');
+        const fechaMov = fecha || store.now().slice(0, 10);
 
-        if (!store.db.cuentasCorrientes) store.db.cuentasCorrientes = [];
-        store.db.cuentasCorrientes.push({
+        const mov = {
             id: 'cc_' + Date.now().toString(),
             clienteId,
             tipo: 'pago',
             monto: m,
             cuentaId: cuentaId,
             descripcion: descFinal,
-            fecha: fecha || (new Date(Date.now() - new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 10)
-        });
+            fecha: fechaMov,
+            ventaId: null
+        };
+        
+        // 1. Registramos el pago en la cuenta corriente (SQLite)
+        store.dao.registrarMovimientoCtaCte(mov);
 
+        // 2. Mantenemos el puente con Finanzas (JSON) hasta que migremos ese módulo
         if (esIncobrable) {
-            // Registramos un Gasto asociado a una cuenta virtual ('cta_cte') para que afecte la Ganancia global sin restar dinero físico.
             if (!store.db.gastos) store.db.gastos = [];
             store.db.gastos.push({
                 id: Date.now().toString() + '_incobrable',
-                fecha: fecha || (new Date(Date.now() - new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 10),
+                fecha: fechaMov,
                 categoria: 'Pérdida por Deuda (Incobrable)',
                 tipo: 'variable',
                 importe: m,
@@ -105,17 +114,19 @@ const clientes = {
                 descripcion: 'Deuda desestimada de: ' + (store.db.clientes.find(c => c.id === clienteId)?.nombre || 'Cliente')
             });
         } else {
-            // Ingreso real a la caja correspondiente
             if (!store.db.ajustesCaja) store.db.ajustesCaja = [];
             store.db.ajustesCaja.push({
                 id: Date.now().toString() + '_pago_cc',
                 cuentaId: cuentaId,
-                fecha: fecha || (new Date(Date.now() - new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 10),
+                fecha: fechaMov,
                 diferencia: m,
                 tipo: 'ingreso',
                 concepto: 'Cobro de Cuenta Corriente: ' + (store.db.clientes.find(c => c.id === clienteId)?.nombre || 'Cliente')
             });
         }
+        
+        /* store.saveDB() removido */ // Guarda JSON
+        store.loadDB(); // Recarga SQLite
     }
 };
 

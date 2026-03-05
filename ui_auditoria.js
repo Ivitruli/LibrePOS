@@ -3,12 +3,12 @@ const inventario = require('./inventario.js');
 const finanzas = require('./finanzas.js');
 
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtQty = (n, u) => u === 'kg' ? Number(n).toFixed(3) + ' kg' : u === '100g' ? Number(n).toFixed(1) + '×100g' : Number(n).toFixed(0) + ' u.';
+const fmtQty = (n, u) => u === 'kg' ? Number(n).toFixed(3) + ' kg' : Number(n).toFixed(0) + ' u.';
 
 // Objeto temporal para guardar lo que el usuario va tipeando antes de confirmar
 let auditoriaCambios = {};
 
-window.abrirModalAuditoria = function() {
+window.abrirModalAuditoria = function () {
     auditoriaCambios = {}; // Limpiamos la memoria
     document.getElementById('aud-search').value = '';
     document.getElementById('aud-filtro').value = 'todos';
@@ -16,15 +16,15 @@ window.abrirModalAuditoria = function() {
     document.getElementById('modal-auditoria').classList.add('open');
 };
 
-window.cerrarModalAuditoria = function() {
+window.cerrarModalAuditoria = function () {
     document.getElementById('modal-auditoria').classList.remove('open');
 };
 
-window.filtrarAuditoria = function() {
+window.filtrarAuditoria = function () {
     window.renderTablaAuditoria();
 };
 
-window.actualizarStockReal = function(productoId, valor) {
+window.actualizarStockReal = function (productoId, valor) {
     if (valor === '') {
         delete auditoriaCambios[productoId];
     } else {
@@ -33,7 +33,7 @@ window.actualizarStockReal = function(productoId, valor) {
     // Re-renderizar solo la fila modificada para no perder el foco del input
     const stockSistema = inventario.getStock(productoId);
     const diffCell = document.getElementById('diff-' + productoId);
-    
+
     if (diffCell && auditoriaCambios[productoId] !== undefined) {
         const diff = auditoriaCambios[productoId] - stockSistema;
         if (Math.abs(diff) < 0.001) {
@@ -48,11 +48,11 @@ window.actualizarStockReal = function(productoId, valor) {
     }
 };
 
-window.renderTablaAuditoria = function() {
+window.renderTablaAuditoria = function () {
     const term = document.getElementById('aud-search').value.toLowerCase();
     const soloDiff = document.getElementById('aud-filtro').value === 'diferencia';
     const tbody = document.getElementById('tabla-auditoria-items');
-    
+
     let html = '';
     let productos = store.db.productos.filter(p => !p.deleted);
 
@@ -60,7 +60,7 @@ window.renderTablaAuditoria = function() {
     if (term) {
         productos = productos.filter(p => p.nombre.toLowerCase().includes(term) || p.barcode?.includes(term) || p.codigo?.toLowerCase().includes(term));
     }
-    
+
     if (soloDiff) {
         productos = productos.filter(p => auditoriaCambios[p.id] !== undefined && Math.abs(auditoriaCambios[p.id] - inventario.getStock(p.id)) >= 0.001);
     }
@@ -68,7 +68,7 @@ window.renderTablaAuditoria = function() {
     productos.forEach(p => {
         const stockSistema = inventario.getStock(p.id);
         const valorReal = auditoriaCambios[p.id] !== undefined ? auditoriaCambios[p.id] : '';
-        
+
         let diffHtml = '-';
         if (valorReal !== '') {
             const diff = valorReal - stockSistema;
@@ -98,7 +98,7 @@ window.renderTablaAuditoria = function() {
     tbody.innerHTML = html;
 };
 
-window.confirmarAuditoria = function() {
+window.confirmarAuditoria = function () {
     const ts = store.now();
     const fecha = ts.slice(0, 10);
     let cambiosAplicados = 0;
@@ -124,19 +124,19 @@ window.confirmarAuditoria = function() {
                 // Registramos la pérdida como un gasto sin afectar una cuenta bancaria real
                 // Usamos 'ajuste_inv' como ID de cuenta fantasma para que no reste de la caja.
                 store.db.gastos.push({
-                    id: 'g_ajuste_' + Date.now().toString() + Math.random().toString().slice(2,5),
+                    id: 'g_ajuste_' + Date.now().toString() + Math.random().toString().slice(2, 5),
                     fecha: fecha,
                     categoria: 'Retiro Mercadería',
                     tipo: 'variable',
                     importe: costoTotal,
-                    cuentaId: 'ajuste_inv', 
+                    cuentaId: 'ajuste_inv',
                     medio: 'Ajuste Físico de Stock',
                     descripcion: `Faltante detectado en Auditoría: ${prod.nombre} (${qtyPerdida} ${prod.unidad})`
                 });
 
             } else if (diff > 0) {
                 store.db.lotes.push({
-                    id: 'lote_ajuste_' + Date.now().toString() + Math.random().toString(36).substring(2,5),
+                    id: 'lote_ajuste_' + Date.now().toString() + Math.random().toString(36).substring(2, 5),
                     productoId: pId,
                     fecha: fecha,
                     vencimiento: null,
@@ -155,14 +155,14 @@ window.confirmarAuditoria = function() {
             return window.showToast('No se detectaron diferencias para ajustar', 'error');
         }
 
-        store.saveDB();
+        /* store.saveDB() removido */
         window.cerrarModalAuditoria();
         window.showToast(`Auditoría finalizada. Se ajustaron ${cambiosAplicados} productos.`);
-        
+
         // Refrescar vistas si están abiertas
         if (typeof window.renderTablaProductos === 'function') window.renderTablaProductos();
         if (typeof window.renderTablaGastos === 'function') window.renderTablaGastos();
-        
+
     } catch (e) {
         window.showToast(e.message, 'error');
     }

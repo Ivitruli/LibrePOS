@@ -20,6 +20,9 @@ const posManager = {
         if (document.getElementById('pos-desc-manual')) {
             document.getElementById('pos-desc-manual').value = '';
         }
+        if (document.getElementById('cart-venta-costo')) {
+            document.getElementById('cart-venta-costo').checked = false;
+        }
         this.descuentoManualRedondeo = 0;
         this.descuentoManualExtra = 0;
     },
@@ -36,6 +39,10 @@ const posManager = {
         let subtotal = 0;
         let subtotalSujetoADescuento = 0;
         
+        // Capturamos el estado del checkbox de venta al costo global
+        const checkboxCosto = document.getElementById('cart-venta-costo');
+        const isCostoGlobalChecked = checkboxCosto ? checkboxCosto.checked : false;
+        
         store.carrito.forEach(item => {
             const totalItem = item.cantidad * item.precioVenta;
             subtotal += totalItem;
@@ -44,7 +51,7 @@ const posManager = {
             const ex = store.db.preciosExtra[item.productoId] || {};
             const tieneDescuentoPropio = (parseFloat(ex.desc) || 0) > 0;
             
-            if (!item.isPromo && !ex.alCosto && !tieneDescuentoPropio) {
+            if (!item.isPromo && !ex.alCosto && !tieneDescuentoPropio && !isCostoGlobalChecked) {
                 subtotalSujetoADescuento += totalItem;
             }
         });

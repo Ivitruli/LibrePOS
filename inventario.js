@@ -7,7 +7,6 @@ const inventario = {
             .reduce((s, l) => s + l.cantDisponible, 0);
     },
 
-    // Modificado: Retorna el costo más alto entre los lotes aún disponibles
     getCostoMasAlto: function(pid) {
         const lotes = store.db.lotes.filter(l => l.productoId === pid && l.cantDisponible > 0);
         if (lotes.length === 0) return 0;
@@ -15,29 +14,25 @@ const inventario = {
     },
 
     calcPrecioFinal: function(pid, forceAlCosto = false) {
-        // 1. Evaluar la cola PEPS: Identificar el lote más antiguo con disponibilidad
         const lotesDisponibles = store.db.lotes
             .filter(l => l.productoId === pid && l.cantDisponible > 0)
             .sort((a, b) => a.fecha.localeCompare(b.fecha));
 
         let costoActivo = 0;
-        let ruleKey = pid; // Clave de retrocompatibilidad o producto sin proveedor
+        let ruleKey = pid; 
 
         if (lotesDisponibles.length > 0) {
             const lotePeps = lotesDisponibles[0];
             costoActivo = lotePeps.costoUnit;
             if (lotePeps.proveedorId) {
-                // Generar clave combinada para extraer reglas específicas del proveedor
                 ruleKey = `${pid}_${lotePeps.proveedorId}`; 
             }
         } else {
-            // Manejo de excepciones: Producto sin stock; se asume el costo histórico máximo
             costoActivo = this.getCostoMasAlto(pid) || 0;
         }
 
         if (costoActivo === 0) return 0;
         
-        // 2. Resolución de rentabilidad
         const ex = store.db.preciosExtra[ruleKey] || store.db.preciosExtra[pid] || { fijo: 0, imp: 0, gan: 30, desc: 0, alCosto: false, precioImpreso: 0 };
         const isAlCosto = forceAlCosto || ex.alCosto;
         let raw = 0;
@@ -60,45 +55,51 @@ const inventario = {
     },
 
     consumirPEPS: function(pId, cant) {
-        const lotes = store.db.lotes
+        // Clonación profunda: Previene la mutación de la RAM global si la transacción aborta
+        const lotesSimulados = JSON.parse(JSON.stringify(store.db.lotes))
             .filter(l => l.productoId === pId && l.cantDisponible > 0)
             .sort((a, b) => a.fecha.localeCompare(b.fecha));
             
         let rest = cant, costoT = 0, movs = [];
         
-        for (const l of lotes) {
+        for (const l of lotesSimulados) {
             if (rest <= 0) break;
             const c = Math.min(l.cantDisponible, rest);
             costoT += c * l.costoUnit;
-            movs.push({ lId: l.id, c });
+            movs.push({ loteId: l.id, cantidad: c });
             l.cantDisponible -= c;
             rest -= c;
         }
         
-        if (rest > 0.0001) throw new Error('Error PEPS: Desincronización de stock o cantidad insuficiente.');
+        if (rest > 0.0001) throw new Error('Stock insuficiente para registrar la muestra.');
         
-        return { costoTotal: costoT, movs };
+        return { costoTotal: costoT, lotesConsumidos: movs };
     },
 
-    // Nuevo: Consume PEPS e imputa como gasto de publicidad (Muestras/Sorteos)
     consumirParaMuestra: function(pId, cant, fecha) {
-        const { costoTotal } = this.consumirPEPS(pId, cant);
+        const { costoTotal, lotesConsumidos } = this.consumirPEPS(pId, cant);
         const p = store.db.productos.find(x => x.id === pId);
         
-        store.db.gastos.push({
-            id: Date.now().toString() + '_muestra',
+        const gastoData = {
+            id: 'muestra_' + Date.now().toString() + Math.random().toString(36).substr(2, 5),
             fecha: fecha,
             categoria: 'Publicidad / Muestras',
             tipo: 'variable',
             importe: costoTotal,
             cuentaId: 'c1', 
             descripcion: 'Muestra/Sorteo: ' + (p ? p.nombre : 'Producto')
-        });
+        };
         
-        return costoTotal;
+        try {
+            store.dao.registrarMuestraTransaccional(gastoData, lotesConsumidos);
+            store.loadDB();
+            return costoTotal;
+        } catch (e) {
+            console.error(e);
+            throw new Error('Fallo al registrar la muestra en la base de datos.');
+        }
     },
 
-    // Nuevo: Obtiene productos cuyo precio calculado difiere del último impreso/etiquetado
     getPreciosDesactualizados: function() {
         return store.db.productos.filter(p => !p.deleted).map(p => {
             const precioCalculado = this.calcPrecioFinal(p.id);
@@ -112,14 +113,20 @@ const inventario = {
         }).filter(item => item !== null);
     },
 
-    // Nuevo: Actualiza la marca del precio en góndola
     marcarPrecioActualizado: function(pId) {
         const precioCalculado = this.calcPrecioFinal(pId);
-        if (!store.db.preciosExtra[pId]) {
-            store.db.preciosExtra[pId] = { fijo: 0, imp: 0, gan: 30, desc: 0, alCosto: false, precioImpreso: 0 };
+        let pol = store.db.preciosExtra[pId] || { fijo: 0, imp: 0, gan: 30, desc: 0, alCosto: false, precioImpreso: 0 };
+        
+        pol.precioImpreso = precioCalculado;
+        
+        // Delegamos la persistencia al DAO en SQLite
+        try {
+            store.dao.guardarPoliticaPrecio(pId, pol);
+            // Sincronización en RAM (opcional si se ejecuta en bucles, pero segura para integridad)
+            store.loadDB(); 
+        } catch (e) {
+            console.error("Fallo al actualizar el histórico del precio impreso:", e.message);
         }
-        store.db.preciosExtra[pId].precioImpreso = precioCalculado;
-        store.saveDB();
     }
 };
 

@@ -19,7 +19,8 @@ const store = {
     loadDB: function () {
         try {
             // --- 1. CARGA DESDE SQLITE ---
-            dbManager.conectar();
+            const sqlitePath = localStorage.getItem('librepos_sqlite_path') || __dirname;
+            dbManager.conectar(sqlitePath);
 
             // Creación defensiva de la tabla
             dbManager.db.exec('CREATE TABLE IF NOT EXISTS configuracion (clave TEXT PRIMARY KEY, valor TEXT NOT NULL);');
@@ -137,11 +138,23 @@ const store = {
     elegirCarpetaGuardado: async function (onSuccess) {
         const carpeta = await ipcRenderer.invoke('dialog:openDirectory');
         if (carpeta) {
-            this.dbFilePath = path.join(carpeta, 'librepos_db.json');
-            localStorage.setItem('librepos_db_path', this.dbFilePath);
-            // la BBDD ahora es SQLite, saveDB() ya no existe, 
-            // pero mantenemos dbFilePath por retrocompatibilidad/exportaciones parciales si se requiere
-            if (onSuccess) onSuccess(this.dbFilePath);
+            try {
+                const oldFolder = dbManager.rutaCarpeta || __dirname;
+                if (oldFolder !== carpeta) {
+                    dbManager.desconectar();
+                    const files = ['librepos.sqlite', 'librepos.sqlite-wal', 'librepos.sqlite-shm'];
+                    for (const f of files) {
+                        const oldF = path.join(oldFolder, f);
+                        const newF = path.join(carpeta, f);
+                        if (fs.existsSync(oldF) && !fs.existsSync(newF)) {
+                            fs.copyFileSync(oldF, newF);
+                        }
+                    }
+                }
+            } catch (error) { console.error('Error al mover BD:', error); }
+
+            localStorage.setItem('librepos_sqlite_path', carpeta);
+            if (onSuccess) onSuccess(carpeta);
         }
     },
 
@@ -325,6 +338,12 @@ const store = {
         },
         guardarConfiguracion: function (clave, valor) {
             try {
+                // Defensa contra cierres repentinos de DB (ej. cambio de carpetas incompleto)
+                if (!dbManager.db) {
+                    const sqlitePath = localStorage.getItem('librepos_sqlite_path') || __dirname;
+                    dbManager.conectar(sqlitePath);
+                }
+
                 // Creación defensiva por si la base se borra
                 dbManager.db.exec('CREATE TABLE IF NOT EXISTS configuracion (clave TEXT PRIMARY KEY, valor TEXT NOT NULL);');
 

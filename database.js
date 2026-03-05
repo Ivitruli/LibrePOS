@@ -4,12 +4,14 @@ const path = require('path');
 class DBManager {
     constructor() {
         this.db = null;
+        this.rutaCarpeta = null;
     }
 
     // Única instancia de conexión
     conectar(rutaCarpeta = __dirname) {
         if (this.db) return;
 
+        this.rutaCarpeta = rutaCarpeta;
         const dbPath = path.join(rutaCarpeta, 'librepos.sqlite');
         this.db = new Database(dbPath);
 
@@ -18,6 +20,13 @@ class DBManager {
         this.db.pragma('foreign_keys = ON');
 
         this.inicializarEsquema();
+    }
+
+    desconectar() {
+        if (this.db) {
+            this.db.close();
+            this.db = null;
+        }
     }
 
     inicializarEsquema() {

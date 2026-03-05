@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 
-function createWindow () {
+function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -31,4 +31,16 @@ ipcMain.handle('dialog:openDirectory', async () => {
   });
   if (canceled) return null;
   return filePaths[0]; // Devuelve la ruta de la carpeta elegida
+});
+
+ipcMain.handle('dialog:saveFile', async (event, options) => {
+  const { canceled, filePath } = await dialog.showSaveDialog(options);
+  if (canceled) return null;
+  return filePath;
+});
+
+ipcMain.handle('dialog:openFile', async (event, options) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(options);
+  if (canceled) return null;
+  return filePaths;
 });

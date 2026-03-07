@@ -105,16 +105,6 @@ class DBManager {
                     FOREIGN KEY (cuenta_id) REFERENCES cuentas(id) ON DELETE RESTRICT
                 );
 
-                CREATE TABLE IF NOT EXISTS proveedores (
-                    id TEXT PRIMARY KEY,
-                    nombre TEXT NOT NULL,
-                    contacto TEXT,
-                    tel TEXT,
-                    dias_pedido TEXT,
-                    dias_entrega TEXT,
-                    deleted INTEGER DEFAULT 0
-                );
-
                 CREATE TABLE IF NOT EXISTS cuentas_por_pagar (
                     id TEXT PRIMARY KEY,
                     proveedor_id TEXT NOT NULL,
@@ -144,6 +134,7 @@ class DBManager {
                     cuenta_id TEXT NOT NULL,
                     descripcion TEXT,
                     deleted INTEGER DEFAULT 0,
+                    estado TEXT DEFAULT 'pagado',
                     FOREIGN KEY (cuenta_id) REFERENCES cuentas(id) ON DELETE RESTRICT
                 );
 
@@ -222,6 +213,16 @@ class DBManager {
                 INSERT OR IGNORE INTO cuentas (id, nombre, saldo_inicial, deleted) 
                 VALUES ('cta_cte', 'Cuenta Corriente (Fiados)', 0, 0);
             `);
+            // Parche dinámico para actualizaciones de esquema (retrocompatibilidad)
+            try {
+                const checkCol = this.db.prepare("SELECT estado FROM gastos LIMIT 1");
+                checkCol.get();
+            } catch (e) {
+                if (e.message.includes("no such column")) {
+                    this.db.exec("ALTER TABLE gastos ADD COLUMN estado TEXT DEFAULT 'pagado'");
+                    console.log("Migración SQLite: Columna 'estado' agregada a tabla 'gastos'.");
+                }
+            }
         } catch (error) {
             console.error("Error SQL al inicializar el esquema:", error.message);
             throw error; // Frena la ejecución si el SQL está mal

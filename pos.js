@@ -4,7 +4,7 @@ const posManager = {
     descuentoManualRedondeo: 0,
     descuentoManualExtra: 0,
 
-    limpiar: function() {
+    limpiar: function () {
         store.carrito = [];
         store.selectedProductId = null;
         if (document.getElementById('pos-barcode')) document.getElementById('pos-barcode').value = '';
@@ -27,38 +27,38 @@ const posManager = {
         this.descuentoManualExtra = 0;
     },
 
-    aplicarRedondeo: function(monto) {
+    aplicarRedondeo: function (monto) {
         this.descuentoManualRedondeo = parseFloat(monto) || 0;
     },
 
-    aplicarDescuentoExtra: function(monto) {
+    aplicarDescuentoExtra: function (monto) {
         this.descuentoManualExtra = parseFloat(monto) || 0;
     },
 
-    calcularTotal: function(isEnvio, costoEnvioInput, isFiado = false) {
+    calcularTotal: function (isEnvio, costoEnvioInput, isFiado = false) {
         let subtotal = 0;
         let subtotalSujetoADescuento = 0;
-        
+
         // Capturamos el estado del checkbox de venta al costo global
         const checkboxCosto = document.getElementById('cart-venta-costo');
         const isCostoGlobalChecked = checkboxCosto ? checkboxCosto.checked : false;
-        
+
         store.carrito.forEach(item => {
             const totalItem = item.cantidad * item.precioVenta;
             subtotal += totalItem;
-            
+
             // Regla de negocio: Promociones, productos al costo o con descuento propio NO reciben el descuento global
             const ex = store.db.preciosExtra[item.productoId] || {};
             const tieneDescuentoPropio = (parseFloat(ex.desc) || 0) > 0;
-            
-            if (!item.isPromo && !ex.alCosto && !tieneDescuentoPropio && !isCostoGlobalChecked) {
+
+            if (!ex.alCosto && !tieneDescuentoPropio && !isCostoGlobalChecked) {
                 subtotalSujetoADescuento += totalItem;
             }
         });
 
         const cuentaSeleccionada = store.db.cuentas.find(c => c.id === store.medioSeleccionado);
         const isEfectivo = cuentaSeleccionada && cuentaSeleccionada.nombre.toLowerCase().includes('efectivo');
-        
+
         let descEfectivo = 0;
         // Si es venta a Cuenta Corriente (Fiado), no aplica descuento por efectivo
         if (isEfectivo && !isFiado) {
@@ -72,11 +72,26 @@ const posManager = {
         }
 
         let totalParcial = subtotal - descEfectivo + envio;
-        
+
         // Sugerencia de redondeo (hacia abajo al múltiplo de 100 más cercano)
         let sugerido = totalParcial % 100;
-        
+
         let totalFinal = totalParcial - this.descuentoManualRedondeo - this.descuentoManualExtra;
+
+        // ESTIMACION CMV Y ALERTA DE PERDIDA
+        let costoTotalAproximado = 0;
+        const inventario = require('./inventario.js');
+        store.carrito.forEach(item => {
+            if (item.isPromo && item.items) {
+                item.items.forEach(sub => {
+                    costoTotalAproximado += inventario.getCostoMasAlto(sub.id) * (sub.cantidad * item.cantidad);
+                });
+            } else {
+                costoTotalAproximado += inventario.getCostoMasAlto(item.productoId) * item.cantidad;
+            }
+        });
+
+        const isVentaBajoCosto = totalFinal < costoTotalAproximado && subtotal > 0;
 
         return {
             subtotal,
@@ -85,7 +100,9 @@ const posManager = {
             sugerido,
             descRedondeo: this.descuentoManualRedondeo,
             descExtra: this.descuentoManualExtra,
-            totalFinal
+            totalFinal,
+            costoAproximado: costoTotalAproximado,
+            isVentaBajoCosto
         };
     }
 };

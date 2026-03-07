@@ -71,10 +71,32 @@ const store = {
                 };
             }
 
+            // Historial de Ventas y Movimientos (Restaurado para Cálculo de Saldos UI)
+            this.db.ventas = dbManager.db.prepare('SELECT * FROM ventas').all().map(v => ({
+                id: v.id, timestamp: v.timestamp, fecha: v.fecha, totalVenta: v.total_venta,
+                totalCosto: v.total_costo, cuentaId: v.cuenta_id, medioPago: v.medio_pago,
+                descEfectivo: v.desc_efectivo, descRedondeo: v.desc_redondeo,
+                costoEnvio: v.costo_envio, envioPagado: v.envio_pagado === 1,
+                facturada: v.facturada === 1, esHistorica: false
+            }));
+
+            this.db.ventaItems = dbManager.db.prepare('SELECT * FROM detalle_ventas').all().map(vi => ({
+                ventaId: vi.venta_id, productoId: vi.producto_id, nombre: vi.nombre,
+                unidad: vi.unidad, cantidad: vi.cantidad, precioVenta: vi.precio_venta,
+                costoTotal: vi.costo_total, isPromo: vi.is_promo === 1
+            }));
+
+            this.db.movimientos = dbManager.db.prepare('SELECT * FROM movimientos').all().map(m => ({
+                id: m.id, cuentaId: m.cuenta_id, fecha: m.fecha, tipo: m.tipo,
+                categoria: m.categoria, importe: m.importe, descripcion: m.descripcion,
+                socioId: m.socio_id || null
+            }));
+
             // Finanzas y Gastos
             this.db.gastos = dbManager.db.prepare('SELECT * FROM gastos WHERE deleted = 0').all().map(g => ({
                 id: g.id, fecha: g.fecha, categoria: g.categoria, tipo: g.tipo,
-                importe: g.importe, cuentaId: g.cuenta_id, descripcion: g.descripcion
+                importe: g.importe, cuentaId: g.cuenta_id, descripcion: g.descripcion,
+                estado: g.estado || 'pagado'
             }));
 
             this.db.cuentasPorPagar = dbManager.db.prepare('SELECT * FROM cuentas_por_pagar').all().map(d => ({
@@ -142,14 +164,27 @@ const store = {
                 const oldFolder = dbManager.rutaCarpeta || __dirname;
                 if (oldFolder !== carpeta) {
                     dbManager.desconectar();
-                    const files = ['librepos.sqlite', 'librepos.sqlite-wal', 'librepos.sqlite-shm'];
-                    for (const f of files) {
-                        const oldF = path.join(oldFolder, f);
-                        const newF = path.join(carpeta, f);
-                        if (fs.existsSync(oldF) && !fs.existsSync(newF)) {
-                            fs.copyFileSync(oldF, newF);
-                        }
-                    }
+                    // IMPORTANTE: SQLite tarda unos ms en soltar los archivos físicos en Windows.
+                    // Aplicamos un mini-timeout para darle tiempo al OS a liberar el lock.
+                    setTimeout(() => {
+                        try {
+                            const files = ['librepos.sqlite', 'librepos.sqlite-wal', 'librepos.sqlite-shm'];
+                            for (const f of files) {
+                                const oldF = path.join(oldFolder, f);
+                                const newF = path.join(carpeta, f);
+                                if (fs.existsSync(oldF) && !fs.existsSync(newF)) {
+                                    fs.copyFileSync(oldF, newF);
+                                    try { fs.unlinkSync(oldF); } catch (e) { console.warn("Lock activo en:", oldF); }
+                                } else if (fs.existsSync(oldF)) {
+                                    try { fs.unlinkSync(oldF); } catch (e) { console.warn("Lock activo en:", oldF); }
+                                }
+                            }
+                        } catch (err) { console.error('Error en timeout de guardado:', err); }
+
+                        localStorage.setItem('librepos_sqlite_path', carpeta);
+                        if (onSuccess) onSuccess(carpeta);
+                    }, 500); // 500ms de gracia
+                    return; // Terminamos aquí por el timeout. El flujo sigue adentro.
                 }
             } catch (error) { console.error('Error al mover BD:', error); }
 
@@ -220,8 +255,8 @@ const store = {
                     for (const consumo of lotesConsumidos) updateLote.run({ cantidad: consumo.cantidad, id: consumo.loteId });
 
                     const insertGasto = dbManager.db.prepare(`
-                        INSERT INTO gastos (id, fecha, categoria, tipo, importe, cuenta_id, descripcion, deleted)
-                        VALUES (@id, @fecha, @categoria, @tipo, @importe, @cuentaId, @descripcion, 0)
+                        INSERT INTO gastos (id, fecha, categoria, tipo, importe, cuenta_id, descripcion, deleted, estado)
+                        VALUES (@id, @fecha, @categoria, @tipo, @importe, @cuentaId, @descripcion, 0, 'pagado')
                     `);
                     insertGasto.run({
                         id: gasto.id, fecha: gasto.fecha, categoria: gasto.categoria, tipo: gasto.tipo,
@@ -230,6 +265,43 @@ const store = {
                 });
             } catch (error) { throw new Error("Fallo crítico en baja de stock."); }
         },
+
+        registrarAuditoriaTransaccional: function (gastos, nuevosLotes, lotesConsumidos) {
+            try {
+                dbManager.ejecutarTransaccion(() => {
+                    // 1. Descontar stock de lotes existentes (Faltantes)
+                    const updateLote = dbManager.db.prepare('UPDATE lotes SET cant_disponible = cant_disponible - @cantidad WHERE id = @id');
+                    for (const consumo of lotesConsumidos) updateLote.run({ cantidad: consumo.cantidad, id: consumo.loteId });
+
+                    // 2. Registrar los Gastos referemtes a las pérdidas
+                    const insertGasto = dbManager.db.prepare(`
+                        INSERT INTO gastos (id, fecha, categoria, tipo, importe, cuenta_id, descripcion, deleted, estado)
+                        VALUES (@id, @fecha, @categoria, @tipo, @importe, @cuentaId, @descripcion, 0, 'pagado')
+                    `);
+                    for (const gasto of gastos) {
+                        insertGasto.run({
+                            id: gasto.id, fecha: gasto.fecha, categoria: gasto.categoria, tipo: gasto.tipo,
+                            importe: gasto.importe, cuentaId: gasto.cuentaId, descripcion: gasto.descripcion
+                        });
+                    }
+
+                    // 3. Registrar los nuevos Lotes (Sobrantes)
+                    const insertLote = dbManager.db.prepare(`
+                        INSERT INTO lotes (id, producto_id, fecha, vencimiento, cant_original, cant_disponible, costo_unit, proveedor_id, comprobante)
+                        VALUES (@id, @productoId, @fecha, @vencimiento, @cantOriginal, @cantDisponible, @costoUnit, @proveedorId, @comprobante)
+                    `);
+                    for (const lote of nuevosLotes) {
+                        insertLote.run({
+                            id: lote.id, productoId: lote.productoId, fecha: lote.fecha,
+                            vencimiento: lote.vencimiento, cantOriginal: lote.cantOriginal,
+                            cantDisponible: lote.cantDisponible, costoUnit: lote.costoUnit,
+                            proveedorId: lote.proveedorId || null, comprobante: lote.comprobante
+                        });
+                    }
+                });
+            } catch (error) { throw new Error("Fallo guardando transacción de auditoría."); }
+        },
+
 
         registrarVentaTransaccional: function (venta, items, lotesConsumidos) {
             try {
@@ -277,22 +349,33 @@ const store = {
         },
         registrarCompraTransaccional: function (lotesAInsertar, datosFinancieros) {
             try {
-                // 1. Guardar la deuda en el sistema Legacy (JSON) temporalmente
+                let nuevaDeuda = null;
+
+                // 1. Crear temporalmente el objeto deuda para memoria RAM
                 if (datosFinancieros.estadoPago === 'deuda') {
-                    if (!store.db.cuentasPorPagar) store.db.cuentasPorPagar = [];
-                    store.db.cuentasPorPagar.push({
+                    nuevaDeuda = {
                         id: 'cxp_' + Date.now().toString(),
                         proveedorId: datosFinancieros.proveedorId,
                         fecha: datosFinancieros.fecha,
                         monto: datosFinancieros.costoTotal,
-                        comprobante: datosFinancieros.comprobante,
+                        descripcion: 'Remito: ' + (datosFinancieros.comprobante || 'S/N'),
                         estado: 'pendiente'
-                    });
-                    /* store.saveDB() removido */ // Guardar el JSON antes de la transacción SQL
+                    };
                 }
 
-                // 2. Disparar la transacción en SQLite para Lotes y Pagos
+                // 2. Disparar la transacción ACID en SQLite para Lotes, Pagos y Deudas
                 dbManager.ejecutarTransaccion(() => {
+                    if (nuevaDeuda) {
+                        const insertDeuda = dbManager.db.prepare(`
+                            INSERT INTO cuentas_por_pagar (id, proveedor_id, fecha, monto, descripcion, estado)
+                            VALUES (@id, @proveedorId, @fecha, @monto, @descripcion, @estado)
+                        `);
+                        insertDeuda.run({
+                            id: nuevaDeuda.id, proveedorId: nuevaDeuda.proveedorId, fecha: nuevaDeuda.fecha,
+                            monto: nuevaDeuda.monto, descripcion: nuevaDeuda.descripcion, estado: nuevaDeuda.estado
+                        });
+                    }
+
                     const insertLote = dbManager.db.prepare(`
                         INSERT INTO lotes (id, producto_id, fecha, vencimiento, cant_original, cant_disponible, costo_unit, cuenta_id, proveedor_id, comprobante)
                         VALUES (@id, @productoId, @fecha, @vencimiento, @cantOriginal, @cantDisponible, @costoUnit, @cuentaId, @proveedorId, @comprobante)
@@ -331,6 +414,7 @@ const store = {
                         });
                     }
                 });
+
             } catch (error) {
                 console.error("Error SQL registrarCompra:", error);
                 throw new Error("Fallo en la transacción de compra.");
@@ -406,40 +490,97 @@ const store = {
         // --- DAO PROVEEDORES ---
         guardarProveedor: function (proveedor) {
             try {
+                // SQLite Scheme validation: Verificamos qué columnas existen realmente porque había 2 scripts CREATE TABLE en conflicto:
+                const columnasInfo = dbManager.db.pragma('table_info(proveedores)');
+                const hasContacto = columnasInfo.some(c => c.name === 'contacto');
+                const hasEmail = columnasInfo.some(c => c.name === 'email');
+                const hasDireccion = columnasInfo.some(c => c.name === 'direccion');
+                const hasTelefono = columnasInfo.some(c => c.name === 'telefono');
+                const hasTelCorto = columnasInfo.some(c => c.name === 'tel');
+
                 const existe = dbManager.db.prepare('SELECT id FROM proveedores WHERE id = ?').get(proveedor.id);
+
+                // Construcción dinámica del Query para evitar crasheos por Schema viejo
+                let campos = ['nombre', 'deleted'];
+                let valores = ['@nombre', '@deleted'];
+                let asignaciones = ['nombre = @nombre', 'deleted = @deleted'];
+
+                let bindParams = {
+                    id: proveedor.id,
+                    nombre: proveedor.nombre,
+                    deleted: proveedor.deleted ? 1 : 0
+                };
+
+                if (hasContacto) { campos.push('contacto'); valores.push('@contacto'); asignaciones.push('contacto = @contacto'); bindParams.contacto = proveedor.contacto || ''; }
+                if (hasEmail) { campos.push('email'); valores.push('@email'); asignaciones.push('email = @email'); bindParams.email = proveedor.email || ''; }
+                if (hasDireccion) { campos.push('direccion'); valores.push('@direccion'); asignaciones.push('direccion = @direccion'); bindParams.direccion = proveedor.direccion || ''; }
+                if (hasTelefono) { campos.push('telefono'); valores.push('@telefono'); asignaciones.push('telefono = @telefono'); bindParams.telefono = proveedor.telefono || ''; }
+                if (hasTelCorto) { campos.push('tel'); valores.push('@tel'); asignaciones.push('tel = @tel'); bindParams.tel = proveedor.telefono || ''; }
+
+                // Estos siempre son esperados
+                campos.push('dias_pedido', 'dias_entrega');
+                valores.push('@diasPedido', '@diasEntrega');
+                asignaciones.push('dias_pedido = @diasPedido', 'dias_entrega = @diasEntrega');
+                bindParams.diasPedido = JSON.stringify(proveedor.diasPedido || []);
+                bindParams.diasEntrega = JSON.stringify(proveedor.diasEntrega || []);
+
                 if (existe) {
-                    const stmt = dbManager.db.prepare(`
-                        UPDATE proveedores SET nombre = @nombre, telefono = @telefono, email = @email, direccion = @direccion, dias_pedido = @diasPedido, dias_entrega = @diasEntrega, deleted = @deleted WHERE id = @id
-                    `);
-                    stmt.run({
-                        id: proveedor.id,
-                        nombre: proveedor.nombre,
-                        telefono: proveedor.telefono || '',
-                        email: proveedor.email || '',
-                        direccion: proveedor.direccion || '',
-                        diasPedido: JSON.stringify(proveedor.diasPedido || []),
-                        diasEntrega: JSON.stringify(proveedor.diasEntrega || []),
-                        deleted: proveedor.deleted ? 1 : 0
-                    });
+                    const stmt = dbManager.db.prepare(`UPDATE proveedores SET ${asignaciones.join(', ')} WHERE id = @id`);
+                    stmt.run(bindParams);
                 } else {
-                    const stmt = dbManager.db.prepare(`
-                        INSERT INTO proveedores (id, nombre, telefono, email, direccion, dias_pedido, dias_entrega, deleted)
-                        VALUES (@id, @nombre, @telefono, @email, @direccion, @diasPedido, @diasEntrega, @deleted)
-                    `);
-                    stmt.run({
-                        id: proveedor.id,
-                        nombre: proveedor.nombre,
-                        telefono: proveedor.telefono || '',
-                        email: proveedor.email || '',
-                        direccion: proveedor.direccion || '',
-                        diasPedido: JSON.stringify(proveedor.diasPedido || []),
-                        diasEntrega: JSON.stringify(proveedor.diasEntrega || []),
-                        deleted: proveedor.deleted ? 1 : 0
-                    });
+                    const stmt = dbManager.db.prepare(`INSERT INTO proveedores (id, ${campos.join(', ')}) VALUES (@id, ${valores.join(', ')})`);
+                    stmt.run(bindParams);
                 }
             } catch (error) {
                 console.error("Error SQL guardarProveedor:", error);
                 throw new Error("Fallo al guardar el proveedor en la base de datos.");
+            }
+        },
+        guardarCuentaPorPagar: function (deuda) {
+            try {
+                const stmt = dbManager.db.prepare(`
+                    INSERT OR REPLACE INTO cuentas_por_pagar (id, proveedor_id, fecha, monto, descripcion, estado)
+                    VALUES (@id, @proveedorId, @fecha, @monto, @descripcion, @estado)
+                `);
+                stmt.run({
+                    id: deuda.id, proveedorId: deuda.proveedorId, fecha: deuda.fecha,
+                    monto: deuda.monto, descripcion: deuda.descripcion,
+                    estado: deuda.estado || (deuda.pagado ? 'pagado' : 'pendiente')
+                });
+            } catch (error) {
+                console.error("Error SQL guardarCuentaPorPagar:", error);
+                throw new Error("Fallo al guardar cuenta por pagar en la base de datos.");
+            }
+        },
+        guardarPagoDeuda: function (pagoDeuda) {
+            try {
+                const stmt = dbManager.db.prepare(`
+                    INSERT INTO pagos_deuda (id, deuda_id, fecha, monto, cuenta_id, tipo)
+                    VALUES (@id, @deudaId, @fecha, @monto, @cuentaId, @tipo)
+                `);
+                stmt.run({
+                    id: pagoDeuda.id, deudaId: pagoDeuda.deudaId, fecha: pagoDeuda.fecha,
+                    monto: pagoDeuda.monto, cuentaId: pagoDeuda.cuentaId, tipo: pagoDeuda.tipo
+                });
+            } catch (error) {
+                console.error("Error SQL guardarPagoDeuda:", error);
+                throw new Error("Fallo al registrar el pago de deuda en la base de datos.");
+            }
+        },
+        // --- DAO COMPRAS ---
+        obtenerUltimoCosto: function (productoId, proveedorId) {
+            try {
+                if (!dbManager.db) return null;
+                const stmt = dbManager.db.prepare(`
+                    SELECT costo_unit FROM lotes 
+                    WHERE producto_id = ? AND proveedor_id = ? 
+                    ORDER BY fecha DESC LIMIT 1
+                `);
+                const result = stmt.get(productoId, proveedorId);
+                return result ? result.costo_unit : null;
+            } catch (error) {
+                console.error("Error SQL obtenerUltimoCosto:", error);
+                return null;
             }
         },
         // --- DAO FINANZAS ---
@@ -469,16 +610,36 @@ const store = {
         },
         guardarGasto: function (gasto) {
             try {
+                // Retrocompatibilidad defensiva: Si no viene estado, se asume 'pagado'
+                const estado = gasto.estado || 'pagado';
                 const stmt = dbManager.db.prepare(`
-                    INSERT INTO gastos (id, fecha, categoria, tipo, importe, cuenta_id, descripcion, deleted)
-                    VALUES (@id, @fecha, @categoria, @tipo, @importe, @cuentaId, @descripcion, 0)
+                    INSERT INTO gastos (id, fecha, categoria, tipo, importe, cuenta_id, descripcion, deleted, estado)
+                    VALUES (@id, @fecha, @categoria, @tipo, @importe, @cuentaId, @descripcion, 0, @estado)
                 `);
                 stmt.run({
                     id: gasto.id, fecha: gasto.fecha, categoria: gasto.categoria,
                     tipo: gasto.tipo, importe: gasto.importe, cuentaId: gasto.cuentaId,
-                    descripcion: gasto.descripcion
+                    descripcion: gasto.descripcion, estado: estado
                 });
             } catch (error) { throw new Error("Fallo al guardar gasto en BD."); }
+        },
+        eliminarGastos: function (idsArray) {
+            try {
+                dbManager.ejecutarTransaccion(() => {
+                    const stmt = dbManager.db.prepare("UPDATE gastos SET deleted = 1 WHERE id = ?");
+                    for (const id of idsArray) {
+                        stmt.run(id);
+                    }
+                });
+            } catch (error) { throw new Error("Fallo al eliminar gastos de la Base de Datos."); }
+        },
+        liquidarGastoProgramado: function (gastoId, cuentaId) {
+            try {
+                const stmt = dbManager.db.prepare(`
+                    UPDATE gastos SET estado = 'pagado', cuenta_id = @cuentaId WHERE id = @id
+                `);
+                stmt.run({ id: gastoId, cuentaId: cuentaId });
+            } catch (error) { throw new Error("Fallo al liquidar gasto programado en BD."); }
         },
         guardarAjusteCaja: function (ajuste) {
             try {
@@ -491,6 +652,25 @@ const store = {
                     diferencia: ajuste.diferencia, tipo: ajuste.tipo, concepto: ajuste.concepto
                 });
             } catch (error) { throw new Error("Fallo al registrar ajuste en BD."); }
+        },
+        registrarRetiroSocioTransaccional: function (mov, lotesConsumidos) {
+            try {
+                dbManager.ejecutarTransaccion(() => {
+                    const insertMov = dbManager.db.prepare(`
+                        INSERT INTO movimientos (id, socio_id, cuenta_id, fecha, tipo, importe, descripcion)
+                        VALUES (@id, @socioId, @cuentaId, @fecha, @tipo, @importe, @descripcion)
+                    `);
+                    insertMov.run({
+                        id: mov.id, socioId: mov.socioId, cuentaId: mov.cuentaId || '', fecha: mov.fecha,
+                        tipo: mov.tipo, importe: mov.importe, descripcion: mov.descripcion
+                    });
+
+                    const updateLote = dbManager.db.prepare('UPDATE lotes SET cant_disponible = cant_disponible - @cantidad WHERE id = @id');
+                    for (const lote of lotesConsumidos) {
+                        updateLote.run({ cantidad: lote.cantidad, id: lote.loteId });
+                    }
+                });
+            } catch (error) { throw new Error("Fallo crítico en retiro de socio: " + error.message); }
         },
         guardarTransferencia: function (transferencia) {
             try {
@@ -573,6 +753,82 @@ const store = {
                     descripcion: mov.descripcion
                 });
             } catch (error) { throw new Error("Fallo al registrar movimiento en BD."); }
+        },
+
+        // --- DAO MINERÍA DE DATOS (MARKET BASKET ANALYSIS) ---
+        /**
+         * Analiza SQLite buscando combinaciones de 2 a 4 productos frecuentemente vendidos en el mismo ticket
+         * Ignora tickets que ya contienen promos o ventas unitarias.
+         */
+        obtenerSugerenciasMarketBasket: function (limite = 10) {
+            try {
+                // Paso 1: Venta ID = Tickets con más de 1 item, ignorando Combos ya armados
+                const queryVentas = `
+                    SELECT venta_id 
+                    FROM detalle_ventas 
+                    WHERE venta_id NOT IN (
+                        SELECT venta_id FROM detalle_ventas WHERE is_promo = 1
+                    )
+                    GROUP BY venta_id 
+                    HAVING COUNT(DISTINCT producto_id) >= 2
+                `;
+
+                const ventasValidas = dbManager.db.prepare(queryVentas).all().map(v => v.venta_id);
+                if (ventasValidas.length === 0) return [];
+
+                // Traemos los detalles para apilarlos
+                const placeHolders = ventasValidas.map(() => '?').join(',');
+                const detalles = dbManager.db.prepare(`
+                    SELECT venta_id, producto_id, nombre 
+                    FROM detalle_ventas 
+                    WHERE venta_id IN (${placeHolders})
+                    ORDER BY venta_id, producto_id
+                `).all(...ventasValidas);
+
+                const ticketsParams = {};
+                detalles.forEach(d => {
+                    if (!ticketsParams[d.venta_id]) ticketsParams[d.venta_id] = [];
+                    if (!ticketsParams[d.venta_id].find(p => p.id === d.producto_id)) {
+                        ticketsParams[d.venta_id].push({ id: d.producto_id, nombre: d.nombre });
+                    }
+                });
+
+                const combinacionesFrecuencias = {};
+
+                const obtenerCombinaciones = (arr, k) => {
+                    let result = [];
+                    if (k === 1) return arr.map(e => [e]);
+                    arr.forEach((e, i) => {
+                        let smallerCombinations = obtenerCombinaciones(arr.slice(i + 1), k - 1);
+                        smallerCombinations.forEach(sc => result.push([e].concat(sc)));
+                    });
+                    return result;
+                };
+
+                Object.values(ticketsParams).forEach(ticket => {
+                    ticket.sort((a, b) => a.id.localeCompare(b.id));
+
+                    for (let n = 2; n <= Math.min(4, ticket.length); n++) {
+                        const combos = obtenerCombinaciones(ticket, n);
+                        combos.forEach(c => {
+                            const hash = c.map(p => p.id).join('||');
+                            if (!combinacionesFrecuencias[hash]) combinacionesFrecuencias[hash] = { items: c, frecuencia: 0 };
+                            combinacionesFrecuencias[hash].frecuencia++;
+                        });
+                    }
+                });
+
+                const topAsociaciones = Object.values(combinacionesFrecuencias)
+                    .filter(c => c.frecuencia > 1)
+                    .sort((a, b) => b.frecuencia - a.frecuencia)
+                    .slice(0, limite);
+
+                return topAsociaciones;
+
+            } catch (error) {
+                console.error("Error SQL MarketBasket:", error);
+                return [];
+            }
         }
     }
 };

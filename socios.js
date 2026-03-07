@@ -14,11 +14,12 @@ const socios = {
             exist.deleted = false;
             exist.nombre = n;
             store.dao.guardarSocio(exist);
+            store.loadDB();
             return { socio: exist, reactivado: true };
         } else {
             const nuevo = { id: 'socio_' + Date.now().toString(), nombre: n, dni: d, deleted: false };
             store.dao.guardarSocio(nuevo);
-            store.db.socios.push(nuevo);
+            store.loadDB();
             return { socio: nuevo, reactivado: false };
         }
     },
@@ -33,10 +34,11 @@ const socios = {
 
         s.deleted = true;
         store.dao.guardarSocio(s);
+        store.loadDB();
         return s;
     },
 
-    registrarMovimiento: function (socioId, tipo, importe, cuentaId, fecha) {
+    registrarMovimiento: function (socioId, tipo, importe, cuentaId, fecha, lotesConsumidos = null) {
         const imp = parseFloat(importe);
         if (!imp || imp <= 0) throw new Error('Monto inválido.');
 
@@ -46,7 +48,7 @@ const socios = {
 
             const mov = { id: 'mov_' + Date.now().toString(), socioId: null, cuentaId: '', fecha: fecha, tipo: tipo, importe: imp, descripcion: 'Reinversión al Capital Propio' };
             store.dao.guardarMovimiento(mov);
-            store.db.movimientos.push(mov);
+            store.loadDB();
             return mov;
         }
 
@@ -59,7 +61,7 @@ const socios = {
 
             const mov = { id: 'mov_' + Date.now().toString(), socioId: socioId, cuentaId: '', fecha: fecha, tipo: tipo, importe: imp, descripcion: 'Asignación de Utilidades a ' + sName };
             store.dao.guardarMovimiento(mov);
-            store.db.movimientos.push(mov);
+            store.loadDB();
             return mov;
         }
 
@@ -73,8 +75,14 @@ const socios = {
 
             const desc = cuentaId ? 'Retiro de Fondos / Préstamo a ' : 'Retiro de Mercadería en especie - ';
             const mov = { id: 'mov_' + Date.now().toString(), socioId: socioId, cuentaId: cuentaId, fecha: fecha, tipo: tipo, importe: imp, descripcion: desc + sName };
-            store.dao.guardarMovimiento(mov);
-            store.db.movimientos.push(mov);
+
+            if (lotesConsumidos && lotesConsumidos.length > 0) {
+                store.dao.registrarRetiroSocioTransaccional(mov, lotesConsumidos);
+                store.loadDB(); // Sincronizamos la UI forzosamente ya que se modificó inventario
+            } else {
+                store.dao.guardarMovimiento(mov);
+                store.loadDB();
+            }
             return mov;
         }
 
@@ -82,7 +90,7 @@ const socios = {
             // CORRECCIÓN: Ahora se considera un Aporte de Capital puro, no una deuda exigible
             const mov = { id: 'mov_' + Date.now().toString(), socioId: socioId, cuentaId: cuentaId, fecha: fecha, tipo: tipo, importe: imp, descripcion: 'Aporte de Capital de ' + sName };
             store.dao.guardarMovimiento(mov);
-            store.db.movimientos.push(mov);
+            store.loadDB();
             return mov;
         }
 

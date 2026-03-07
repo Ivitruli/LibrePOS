@@ -104,6 +104,10 @@ window.confirmarAuditoria = function () {
     let cambiosAplicados = 0;
     let costoPerdidaTotal = 0;
 
+    const gastosTransaccion = [];
+    const nuevosLotesTransaccion = [];
+    const lotesConsumidosTransaccion = [];
+
     try {
         for (const pId in auditoriaCambios) {
             const stockReal = parseFloat(auditoriaCambios[pId]);
@@ -116,14 +120,16 @@ window.confirmarAuditoria = function () {
             if (Math.abs(diff) < 0.001) continue; // No hubo diferencia real
 
             if (diff < 0) {
-                // FALTANTE: Se consumen lotes PEPS y se registra gasto
+                // FALTANTE: Se consumen lotes PEPS simulados y se prepara el gasto
                 const qtyPerdida = Math.abs(diff);
-                const { costoTotal } = inventario.consumirPEPS(pId, qtyPerdida);
+                const { costoTotal, lotesConsumidos } = inventario.consumirPEPS(pId, qtyPerdida);
                 costoPerdidaTotal += costoTotal;
 
+                // Agregar consumos al array general de la transacción
+                lotesConsumidosTransaccion.push(...lotesConsumidos);
+
                 // Registramos la pérdida como un gasto sin afectar una cuenta bancaria real
-                // Usamos 'ajuste_inv' como ID de cuenta fantasma para que no reste de la caja.
-                store.db.gastos.push({
+                gastosTransaccion.push({
                     id: 'g_ajuste_' + Date.now().toString() + Math.random().toString().slice(2, 5),
                     fecha: fecha,
                     categoria: 'Retiro Mercadería',
@@ -135,7 +141,7 @@ window.confirmarAuditoria = function () {
                 });
 
             } else if (diff > 0) {
-                store.db.lotes.push({
+                nuevosLotesTransaccion.push({
                     id: 'lote_ajuste_' + Date.now().toString() + Math.random().toString(36).substring(2, 5),
                     productoId: pId,
                     fecha: fecha,
@@ -155,7 +161,10 @@ window.confirmarAuditoria = function () {
             return window.showToast('No se detectaron diferencias para ajustar', 'error');
         }
 
-        /* store.saveDB() removido */
+        // --- COMMIT ATÓMICO SQLITE ---
+        store.dao.registrarAuditoriaTransaccional(gastosTransaccion, nuevosLotesTransaccion, lotesConsumidosTransaccion);
+        store.loadDB();
+
         window.cerrarModalAuditoria();
         window.showToast(`Auditoría finalizada. Se ajustaron ${cambiosAplicados} productos.`);
 

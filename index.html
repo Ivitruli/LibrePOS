@@ -69,7 +69,11 @@
         </div>
 
         <div class="cart-panel">
-          <div class="cart-header">🛒 Venta actual</div>
+          <div class="cart-header d-flex justify-between align-center">
+            <span>🛒 Venta actual</span>
+            <button class="btn btn-sm btn-secondary font-bold" onclick="window.uiPosKit.abrirModalKit()"
+              style="padding: 0.2rem 0.5rem;">📦 Armar Combo</button>
+          </div>
           <div class="cart-items" id="cart-items">
             <div class="p-1 text-center text-muted">Seleccioná productos</div>
           </div>
@@ -133,6 +137,9 @@
                 <span class="caps-label" id="cart-total-label" style="margin:0;">Total</span>
                 <span class="cart-total-amount" id="cart-total">$0</span>
               </div>
+              <div id="cart-alerta-cmv" class="text-xs text-red mt-sm font-bold text-center" style="display:none;">
+                ⚠️ ALERTA: Monto por debajo del Costo (CMV)
+              </div>
             </div>
 
             <button class="btn btn-success w-full mt-1" style="font-size:.95rem; padding:.82rem;"
@@ -141,6 +148,65 @@
           </div>
         </div>
       </div>
+
+      <!-- MODAL KIT DINÁMICO (AD-HOC) -->
+      <div id="modal-kit-dinamico" class="modal-overlay">
+        <div class="modal" style="max-width: 600px;">
+          <h3 class="mb-1">📦 Armar Receta/Combo al Vuelo</h3>
+          <div class="info-tooltip mb-1">Este combo se venderá por un precio unificado, pero debitará el inventario
+            individual (PEPS) de los insumos físicos que escojas debajo.</div>
+
+          <div class="form-grid mb-1">
+            <div class="form-group flex-2">
+              <label>Nombre del Kit en Ticket *</label>
+              <input type="text" id="kit-nombre" placeholder="Ej: Pizza + Gaseosa">
+            </div>
+            <div class="form-group flex-1">
+              <label>Precio Venta Global ($) *</label>
+              <input type="number" id="kit-precio-final" placeholder="0.00" class="font-bold text-lg text-green">
+            </div>
+          </div>
+
+          <h4 class="mt-1 mb-sm">Insumos a descontar de stock:</h4>
+          <div class="d-flex gap-sm mb-1 align-end">
+            <div class="form-group flex-1">
+              <label>Buscar Insumo</label>
+              <input type="text" id="kit-search" placeholder="Buscar producto a incluir...">
+              <div id="kit-search-results" class="autocomplete-dropdown hidden"></div>
+            </div>
+            <div class="form-group" style="width: 90px;">
+              <label>Cant.</label>
+              <input type="number" id="kit-qty" value="1" min="0.001" step="any">
+            </div>
+            <button class="btn btn-secondary" onclick="window.uiPosKit.agregarInsumoPendiente()">Añadir</button>
+          </div>
+
+          <table class="mb-1 text-sm">
+            <thead>
+              <tr>
+                <th>Insumo Físico</th>
+                <th>Cant. a descontar</th>
+                <th>Costo Ref. (CMV)</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="kit-items-tbody"></tbody>
+          </table>
+
+          <div class="d-flex justify-between align-center bg-surface2 p-sm mb-1"
+            style="border-radius: 5px; border: 1px dashed var(--border);">
+            <span class="text-sm">CMV Total de Insumos:</span>
+            <strong id="kit-cmv-total" class="mono text-red">$0.00</strong>
+          </div>
+
+          <div class="d-flex gap-sm justify-end">
+            <button class="btn btn-secondary" onclick="window.uiPosKit.cerrarModalKit()">Cancelar</button>
+            <button class="btn btn-primary" onclick="window.uiPosKit.inyectarKitAlCarrito()">🛒 Empaquetar y Enviar a
+              Venta</button>
+          </div>
+        </div>
+      </div>
+      <!-- FIN MODALES DE CAJA -->
     </section>
 
     <section class="section" id="sec-clientes">
@@ -360,39 +426,106 @@
       <div id="vent-promo" class="vent-tab">
         <div class="card border-left-green">
           <div class="d-flex justify-between align-center">
-            <div class="card-title" style="margin:0; border:none;">Mis Promociones Activas</div>
-            <button class="btn btn-primary" onclick="window.abrirModalNuevaPromo()">+ Crear Promo Manual</button>
+            <div class="card-title" style="margin:0; border:none;">Mis Combos y Promociones</div>
+            <button class="btn btn-primary" onclick="window.uiCombos.abrirModalNuevoCombo()">✨ Crear Nuevo
+              Combo</button>
           </div>
-          <div class="info-tooltip mt-1">Las promociones creadas aquí aparecerán como botones rápidos en la Caja
-            Registradora (POS). No reciben el descuento general en efectivo.</div>
-          <div id="lista-promos-activas"
+          <div class="info-tooltip mt-1">Los combos creados aparecerán como botones rápidos en la Caja Registradora
+            (POS). El sistema agrupa los productos y aplica el descuento sugerido de manera automática garantizando
+            rentabilidad.</div>
+          <div id="lista-combos-activas"
             style="margin-top:1.5rem; display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:1rem;">
+            <!-- Se inyecta por JS -->
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-title">Sugerencias del Algoritmo (Market Basket Analysis)</div>
-          <div class="info-tooltip">Calcula agrupaciones de productos que se venden juntos con frecuencia. Te sugiere un
-            descuento garantizando una ganancia mínima del 10%.</div>
-          <div class="mt-1 mb-1">
-            <button class="btn btn-primary" onclick="generarAnalisisPromociones()">Ejecutar Análisis y Mostrar
-              Sugerencias</button>
+        <!-- MODAL CREADOR DE COMBOS -->
+        <div id="modal-combo" class="modal-overlay">
+          <div class="modal" style="max-width: 800px;">
+            <h3 class="mb-1">Configurar Nuevo Combo / Promoción</h3>
+            <div class="form-grid mb-1">
+              <div class="form-group">
+                <label>Nombre del Combo *</label>
+                <input type="text" id="combo-nombre" placeholder="Ej: Promo Fernet + Coca">
+              </div>
+            </div>
+
+            <h4 class="mt-1 mb-sm">1. Agregar Productos al Combo</h4>
+            <div class="d-flex gap-sm mb-1 align-end">
+              <div class="form-group flex-1">
+                <label>Buscar Producto</label>
+                <input type="text" id="combo-search" placeholder="Escriba para buscar...">
+                <div id="combo-search-results" class="autocomplete-dropdown hidden"></div>
+              </div>
+              <div class="form-group" style="width: 100px;">
+                <label>Cantidad</label>
+                <input type="number" id="combo-qty" value="1" min="1">
+              </div>
+              <button class="btn btn-secondary" onclick="window.uiCombos.agregarItemPendiente()">Añadir</button>
+            </div>
+
+            <!-- Contenedor Sugerencias de Minería -->
+            <div id="combo-sugerencias-wrapper" class="bg-surface2 p-sm mb-1" style="border-radius: 5px; display:none;">
+              <span class="text-xs caps-label" style="margin: 0">💡 Sugerencias Inteligentes (Vendidos Juntos):</span>
+              <div id="combo-sugerencias-box" class="d-flex gap-sm mt-sm" style="flex-wrap: wrap;"></div>
+            </div>
+
+            <table class="mb-1">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Cant.</th>
+                  <th>Costo Unit. (Aislado)</th>
+                  <th>Precio Base Unit.</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="combo-items-tbody"></tbody>
+            </table>
+
+            <h4 class="mt-1 mb-sm">2. Análisis de Rentabilidad y Sugerencia</h4>
+            <div class="bg-surface2 p-1" style="border-radius: 5px; border: 1px dashed var(--border);">
+              <div class="d-flex justify-between mb-sm text-sm">
+                <span>Costo Total Puro (CMV):</span>
+                <strong class="mono" id="combo-lbl-costo">$0.00</strong>
+              </div>
+              <div class="d-flex justify-between mb-sm text-sm">
+                <span>Precio de Venta Normal (Sin Descuentos):</span>
+                <strong class="mono" id="combo-lbl-precio-base">$0.00</strong>
+              </div>
+              <div class="dashed-divider mt-sm mb-sm"></div>
+              <div class="d-flex justify-between text-sm align-center">
+                <div>
+                  <span class="text-green font-bold">🎯 Sugerencia del Motor de Rentabilidad:</span>
+                  <div class="text-xs text-muted mt-2">Calculado para proteger el costo asumiendo que el cliente pagará
+                    en efectivo (-10%).</div>
+                </div>
+                <div class="text-right">
+                  <span style="font-size: 0.8rem">Descuento Máx. Permitido: <strong id="combo-lbl-desc-max"
+                      class="text-red">0%</strong></span><br>
+                  <span style="font-size: 0.8rem">Precio Piso de Seguridad: <strong class="mono"
+                      id="combo-lbl-precio-piso">$0.00</strong></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-grid mt-1">
+              <div class="form-group">
+                <label>Precio Final del Combo ($)</label>
+                <input type="number" id="combo-precio-final" class="font-bold text-lg" style="color: var(--green);"
+                  placeholder="0.00" oninput="window.uiCombos.validarPrecioIngresado()">
+                <div id="combo-alerta-rentabilidad" class="text-xs mt-2 text-red"
+                  style="display: none; font-weight: bold;"></div>
+              </div>
+            </div>
+
+            <div class="d-flex gap-sm justify-end mt-1">
+              <button class="btn"
+                onclick="document.getElementById('modal-combo').classList.remove('open')">Cancelar</button>
+              <button class="btn btn-primary" id="btn-guardar-combo" onclick="window.uiCombos.guardarCombo()">Guardar
+                Promoción</button>
+            </div>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Combinación Sugerida</th>
-                <th>Ventas Conjuntas</th>
-                <th>Precio Recomendado</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="tabla-promociones">
-              <tr>
-                <td colspan="4" class="text-center text-muted">Ejecutá el análisis para ver el Top 10.</td>
-              </tr>
-            </tbody>
-          </table>
         </div>
       </div>
     </section>
@@ -488,7 +621,26 @@
       </div>
 
       <div class="card">
-        <div class="card-title">Registrar gasto</div>
+        <div class="card-title text-accent">Gastos Programados / Pendientes de Pago</div>
+        <div class="info-tooltip mb-1">Los gastos programados no impactan en la caja hasta que son efectivamente
+          liquidados.</div>
+        <table style="border: 2px solid var(--accent); border-radius: 8px;">
+          <thead style="background:var(--surface2);">
+            <tr>
+              <th>Fecha Prog.</th>
+              <th>Categoría</th>
+              <th>Descripción</th>
+              <th>Importe</th>
+              <th style="min-width: 150px;">Abonar Desde</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-gastos-pendientes"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Registrar nuevo gasto</div>
         <div class="form-grid">
           <div class="form-group"><label>Fecha *</label><input type="date" id="gasto-fecha"></div>
           <div class="form-group"><label>Categoría *</label>
@@ -509,24 +661,33 @@
               <option value="fijo">Gasto Fijo</option>
             </select>
           </div>
+          <div class="form-group"><label>Estado del Pago</label>
+            <select id="gasto-estado"
+              onchange="document.getElementById('gasto-cuenta').disabled = (this.value === 'pendiente')">
+              <option value="pagado">Pagado en el momento</option>
+              <option value="pendiente">Programado (A pagar luego)</option>
+            </select>
+          </div>
           <div class="form-group"><label>Importe ($) *</label><input type="number" id="gasto-importe" step="0.01"
               min="0"></div>
-          <div class="form-group"><label>Pagado desde cuenta *</label><select id="gasto-cuenta"></select></div>
-          <div class="form-group"><label>Descripción</label><input type="text" id="gasto-desc"></div>
+          <div class="form-group"><label>Pagado desde cuenta (Opcional si es Programado)</label><select
+              id="gasto-cuenta"></select></div>
         </div>
+        <div class="form-group mt-1"><label>Descripción</label><input type="text" id="gasto-desc"></div>
         <div class="mt-1"><button class="btn btn-primary" onclick="registrarGasto()">Registrar gasto</button></div>
       </div>
+
       <div class="card">
-        <div class="card-title">Historial de gastos</div>
+        <div class="card-title">Historial de gastos pagados</div>
         <table>
           <thead>
             <tr>
-              <th>Fecha</th>
+              <th>Fecha Pago</th>
               <th>Categoría</th>
               <th>Tipo</th>
               <th>Descripción</th>
               <th>Importe</th>
-              <th>Cuenta</th>
+              <th>Pagado Desde</th>
               <th></th>
             </tr>
           </thead>

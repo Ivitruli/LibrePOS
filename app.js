@@ -10,9 +10,11 @@ require('./ui_clientes.js');
 require('./ui_ventas_historicas.js');
 require('./ui_auditoria.js');
 require('./ui_config.js');
+require('./ui_combos.js');
 
 // Utilidades locales: Corrección de Zona Horaria (Timezone Offset)
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+window.fmt = fmt;
 const today = () => store.now().slice(0, 10);
 
 window.showToast = function (msg, type = 'success') {

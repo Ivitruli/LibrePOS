@@ -23,141 +23,19 @@ window.showVentTab = function (id, btn) {
     document.querySelectorAll('#sec-ventas .tab-pill').forEach(b => b.classList.remove('active'));
     document.getElementById('vent-' + id).style.display = 'block';
     btn.classList.add('active');
-    if (id === 'promo') window.renderPromosActivas();
+    if (id === 'promo') window.uiCombos.renderGrillaPromosActivas();
 };
 
 window.renderTablaVentas = function () {
     document.getElementById('tabla-ventas-menu').innerHTML = [...store.db.ventas].reverse().map(v => `<tr><td class="mono">${new Date(v.timestamp).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</td><td style="font-size:.78rem;">${store.db.ventaItems.filter(i => i.ventaId === v.id).map(i => (i.isPromo ? '⭐ ' : '') + i.nombre).join(', ')}</td><td class="mono">${fmt(v.totalVenta + v.costoEnvio)}</td><td class="mono">${v.descEfectivo > 0 ? fmt(v.descEfectivo) : '—'}</td><td><span class="badge badge-ink">${v.medioPago}</span></td><td><input type="checkbox" ${v.facturada ? 'checked' : ''} onchange="store.db.ventas.find(x=>x.id==='${v.id}').facturada=this.checked;/* store.saveDB() removido */"></td></tr>`).join('');
 };
 
-window.generarAnalisisPromociones = function () {
-    try {
-        const promos = reportes.generarAnalisisPromociones(10);
-        const tbody = document.getElementById('tabla-promociones');
-        if (!promos.length) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay suficientes datos de ventas conjuntas para generar sugerencias.</td></tr>';
-            return;
-        }
-        tbody.innerHTML = promos.map(p => `<tr>
-            <td><strong>${p.nombres.join(' + ')}</strong><br><span style="font-size:0.75rem;color:var(--muted)">Precio individual sumado: ${fmt(p.precioNormal)}</span></td>
-            <td class="mono">${p.frecuencia} veces</td>
-            <td><span style="color:var(--green);font-weight:bold;">Sugerido: ${fmt(p.precioPromo)}</span><br><span style="font-size:0.75rem;color:var(--accent)">(-${p.porcentaje}%)</span></td>
-            <td><button class="btn btn-sm btn-primary" onclick='window.abrirModalNuevaPromo(${JSON.stringify("Promo: " + p.nombres.join(" + "))}, ${JSON.stringify(p.ids)}, ${p.porcentaje})'>Crear Promo</button></td>
-        </tr>`).join('');
-    } catch (e) {
-        window.showToast(e.message, 'error');
-    }
-};
 
-// ================= GESTIÓN DE PROMOCIONES (COMBOS) =================
-window.abrirModalNuevaPromo = function (nombre = '', ids = [], desc = 15) {
-    if (!store.db.promociones) store.db.promociones = [];
-    promoItems = [];
-    document.getElementById('promo-nombre').value = nombre || '';
-    document.getElementById('promo-desc').value = desc || 15;
-
-    document.getElementById('promo-add-prod').innerHTML = '<option value="">— Producto —</option>' + store.db.productos.filter(p => !p.deleted).map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
-
-    if (ids && ids.length) {
-        ids.forEach(id => {
-            const prod = store.db.productos.find(p => p.id === id);
-            if (prod) {
-                promoItems.push({ id: prod.id, nombre: prod.nombre, cantidad: 1, costoU: inventario.getCostoMasAlto(prod.id), precioU: inventario.calcPrecioFinal(prod.id), unidad: prod.unidad });
-            }
-        });
-    }
-    window.calcularTotalesPromo();
-    document.getElementById('modal-promo').classList.add('open');
-};
-
-window.agregarProductoPromo = function () {
-    const pId = document.getElementById('promo-add-prod').value;
-    const qty = parseFloat(document.getElementById('promo-add-qty').value);
-    if (!pId || !qty || qty <= 0) return;
-    const prod = store.db.productos.find(p => p.id === pId);
-
-    const exist = promoItems.find(i => i.id === pId);
-    if (exist) exist.cantidad += qty;
-    else promoItems.push({ id: prod.id, nombre: prod.nombre, cantidad: qty, costoU: inventario.getCostoMasAlto(prod.id), precioU: inventario.calcPrecioFinal(prod.id), unidad: prod.unidad });
-
-    document.getElementById('promo-add-qty').value = 1;
-    window.calcularTotalesPromo();
-};
-
-window.quitarProductoPromo = function (idx) {
-    promoItems.splice(idx, 1);
-    window.calcularTotalesPromo();
-};
-
-window.calcularTotalesPromo = function () {
-    const tbody = document.getElementById('tabla-promo-items');
-    tbody.innerHTML = promoItems.map((i, idx) => `<tr><td>${i.nombre}</td><td class="mono">${i.cantidad}</td><td class="mono">${fmt(i.costoU)}</td><td class="mono">${fmt(i.precioU * i.cantidad)}</td><td><button class="btn btn-sm btn-danger" onclick="window.quitarProductoPromo(${idx})">✕</button></td></tr>`).join('');
-
-    const costoTotal = promoItems.reduce((s, i) => s + (i.costoU * i.cantidad), 0);
-    const precioNormal = promoItems.reduce((s, i) => s + (i.precioU * i.cantidad), 0);
-    const desc = parseFloat(document.getElementById('promo-desc').value) || 0;
-
-    let precioPromo = precioNormal * (1 - desc / 100);
-    if (precioPromo < costoTotal * 1.1) precioPromo = costoTotal * 1.1;
-
-    document.getElementById('promo-costo').textContent = fmt(costoTotal);
-    document.getElementById('promo-normal').textContent = fmt(precioNormal);
-    document.getElementById('promo-final').textContent = fmt(precioPromo);
-};
-
-window.guardarPromoManual = function () {
-    const nombre = document.getElementById('promo-nombre').value.trim();
-    if (!nombre || promoItems.length < 1) return window.showToast('Faltan datos o productos para el combo', 'error');
-
-    const costoTotal = promoItems.reduce((s, i) => s + (i.costoU * i.cantidad), 0);
-    const precioNormal = promoItems.reduce((s, i) => s + (i.precioU * i.cantidad), 0);
-    const desc = parseFloat(document.getElementById('promo-desc').value) || 0;
-    let precioPromo = precioNormal * (1 - desc / 100);
-    if (precioPromo < costoTotal * 1.1) precioPromo = costoTotal * 1.1;
-
-    if (!store.db.promociones) store.db.promociones = [];
-    const nuevaPromo = { id: 'promo_' + Date.now().toString(), nombre, items: promoItems, precioPromo, activa: true };
-
-    // 1. Guardar en SQLite
-    store.dao.guardarPromocion(nuevaPromo);
-
-    // 2. Reflejar en memoria RAM
-    store.db.promociones.push(nuevaPromo);
-
-    document.getElementById('modal-promo').classList.remove('open');
-    window.renderPromosActivas();
-    if (typeof window.renderPromosActivasPOS === 'function') window.renderPromosActivasPOS();
-    window.showToast('Promoción guardada y activa en el POS');
-};
-
-window.renderPromosActivas = function () {
-    if (!store.db.promociones) store.db.promociones = [];
-    const c = document.getElementById('lista-promos-activas');
-    if (!c) return;
-    if (store.db.promociones.length === 0) {
-        c.innerHTML = '<div style="color:var(--muted);font-size:.85rem;">No hay promociones creadas.</div>'; return;
-    }
-    c.innerHTML = store.db.promociones.map(p => `
-        <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1rem; display:flex; flex-direction:column; justify-content:space-between;">
-            <div>
-                <div style="font-weight:bold; font-size:1.1rem; color:var(--green);">⭐ ${p.nombre}</div>
-                <div style="font-size:0.8rem; color:var(--muted); margin-top:5px; padding-left:10px; border-left:2px solid var(--border);">
-                    ${p.items.map(i => `${i.cantidad}x ${i.nombre}`).join('<br>')}
-                </div>
-            </div>
-            <div style="margin-top:1rem; display:flex; justify-content:space-between; align-items:flex-end; border-top:1px dashed var(--border); padding-top:.5rem;">
-                <div class="mono" style="font-size:1.4rem; font-weight:bold;">${fmt(p.precioPromo)}</div>
-                <button class="btn btn-sm btn-danger" onclick="if(confirm('¿Eliminar promoción?')){ store.dao.eliminarPromocion('${p.id}'); store.db.promociones = store.db.promociones.filter(x=>x.id!=='${p.id}'); window.renderPromosActivas(); if(typeof window.renderPromosActivasPOS === 'function') window.renderPromosActivasPOS(); window.showToast('Promoción eliminada'); }">🗑️ Borrar</button>
-            </div>
-        </div>
-    `).join('');
-};
 
 // ================= PROVEEDORES Y DEUDAS =================
 window.agregarProveedor = function () {
     try {
-        proveedores.agregar(document.getElementById('prov-nombre').value, document.getElementById('prov-contacto').value, document.getElementById('prov-tel').value, Array.from(document.getElementById('prov-dias-pedido').selectedOptions).map(o => o.value), Array.from(document.getElementById('prov-dias-entrega').selectedOptions).map(o => o.value));
-        /* store.saveDB() removido */
+        proveedores.agregar(document.getElementById('prov-nombre').value, document.getElementById('prov-contacto').value, document.getElementById('prov-tel').value, '', '', Array.from(document.getElementById('prov-dias-pedido').selectedOptions).map(o => o.value), Array.from(document.getElementById('prov-dias-entrega').selectedOptions).map(o => o.value));
         window.renderTablaProveedores();
         if (typeof window.populateSelects === 'function') window.populateSelects();
 
@@ -171,9 +49,9 @@ window.agregarProveedor = function () {
     } catch (e) { window.showToast(e.message, 'error'); }
 };
 window.abrirEditarProv = function (id) { const p = store.db.proveedores.find(x => x.id === id); if (!p) return; document.getElementById('eprov-id').value = id; document.getElementById('eprov-nombre').value = p.nombre; document.getElementById('eprov-contacto').value = p.contacto || ''; document.getElementById('eprov-tel').value = p.tel || ''; Array.from(document.getElementById('eprov-dias-pedido').options).forEach(o => o.selected = (p.diasPedido || []).includes(o.value)); Array.from(document.getElementById('eprov-dias-entrega').options).forEach(o => o.selected = (p.diasEntrega || []).includes(o.value)); document.getElementById('modal-edit-prov').classList.add('open'); };
-window.guardarEditProv = function () { try { proveedores.editar(document.getElementById('eprov-id').value, document.getElementById('eprov-nombre').value, document.getElementById('eprov-contacto').value, document.getElementById('eprov-tel').value, Array.from(document.getElementById('eprov-dias-pedido').selectedOptions).map(o => o.value), Array.from(document.getElementById('eprov-dias-entrega').selectedOptions).map(o => o.value)); /* store.saveDB() removido */ document.getElementById('modal-edit-prov').classList.remove('open'); window.renderTablaProveedores(); window.showToast('Proveedor actualizado'); } catch (e) { window.showToast(e.message, 'error'); } };
-window.eliminarProveedor = function (id) { try { if (confirm('¿Eliminar proveedor? Historial de compras se mantendrá.')) { proveedores.eliminar(id); /* store.saveDB() removido */ window.renderTablaProveedores(); if (typeof window.populateSelects === 'function') window.populateSelects(); window.showToast('Proveedor eliminado'); } } catch (e) { window.showToast(e.message, 'error'); } };
-window.registrarDeuda = function () { try { proveedores.registrarDeuda(document.getElementById('deuda-prov').value, document.getElementById('deuda-fecha').value, document.getElementById('deuda-monto').value, document.getElementById('deuda-desc').value); /* store.saveDB() removido */ window.renderTablaDeudas(); window.showToast('Deuda registrada'); } catch (e) { window.showToast(e.message, 'error'); } };
+window.guardarEditProv = function () { try { proveedores.editar(document.getElementById('eprov-id').value, document.getElementById('eprov-nombre').value, document.getElementById('eprov-contacto').value, document.getElementById('eprov-tel').value, '', '', Array.from(document.getElementById('eprov-dias-pedido').selectedOptions).map(o => o.value), Array.from(document.getElementById('eprov-dias-entrega').selectedOptions).map(o => o.value)); document.getElementById('modal-edit-prov').classList.remove('open'); window.renderTablaProveedores(); window.showToast('Proveedor actualizado'); } catch (e) { window.showToast(e.message, 'error'); } };
+window.eliminarProveedor = function (id) { try { if (confirm('¿Eliminar proveedor? Historial de compras se mantendrá.')) { proveedores.eliminar(id); window.renderTablaProveedores(); if (typeof window.populateSelects === 'function') window.populateSelects(); window.showToast('Proveedor eliminado'); } } catch (e) { window.showToast(e.message, 'error'); } };
+window.registrarDeuda = function () { try { proveedores.registrarDeuda(document.getElementById('deuda-prov').value, document.getElementById('deuda-fecha').value, document.getElementById('deuda-monto').value, document.getElementById('deuda-desc').value); window.renderTablaDeudas(); window.showToast('Deuda registrada'); } catch (e) { window.showToast(e.message, 'error'); } };
 window.abrirPagoDeuda = function (id) {
     const d = store.db.cuentasPorPagar.find(x => x.id === id);
     if (!d) return;
@@ -207,12 +85,84 @@ window.pagarCadete = function () {
     } catch (e) { window.showToast(e.message, 'error'); }
 };
 
-window.registrarGasto = function () { try { finanzas.registrarGasto(document.getElementById('gasto-fecha').value, document.getElementById('gasto-cat').value, document.getElementById('gasto-tipo').value, document.getElementById('gasto-importe').value, document.getElementById('gasto-cuenta').value, document.getElementById('gasto-desc').value); /* store.saveDB() removido */ window.renderTablaGastos(); window.renderFinanzasTotales(); window.renderCuentas(); window.showToast('Gasto ok'); } catch (e) { window.showToast(e.message, 'error'); } };
+window.registrarGasto = function () {
+    try {
+        const estado = document.getElementById('gasto-estado').value;
+        const cuenta = document.getElementById('gasto-cuenta').value;
+
+        finanzas.registrarGasto(
+            document.getElementById('gasto-fecha').value,
+            document.getElementById('gasto-cat').value,
+            document.getElementById('gasto-tipo').value,
+            document.getElementById('gasto-importe').value,
+            cuenta,
+            document.getElementById('gasto-desc').value,
+            estado
+        );
+
+        window.renderTablaGastos();
+        window.renderTablaGastosProgramados();
+        window.renderFinanzasTotales();
+        window.renderCuentas();
+        window.showToast('Gasto registrado exitosamente');
+    } catch (e) {
+        window.showToast(e.message, 'error');
+    }
+};
+
 window.renderTablaGastos = function () {
     const agrupados = {};
-    store.db.gastos.forEach(g => { const k = `${g.fecha}_${g.categoria}_${g.descripcion || ''}`; if (!agrupados[k]) agrupados[k] = { ...g, ids: [g.id] }; else { agrupados[k].importe += g.importe; agrupados[k].ids.push(g.id); } });
+    // Feature: Solo mostrar en historial los que ya están pagados
+    store.db.gastos.filter(g => g.estado === 'pagado').forEach(g => {
+        const k = `${g.fecha}_${g.categoria}_${g.descripcion || ''}`;
+        if (!agrupados[k]) agrupados[k] = { ...g, ids: [g.id] };
+        else { agrupados[k].importe += g.importe; agrupados[k].ids.push(g.id); }
+    });
+
     const arr = Object.values(agrupados).sort((a, b) => b.fecha.localeCompare(a.fecha));
-    document.getElementById('tabla-gastos').innerHTML = arr.map(g => `<tr><td class="mono">${fmtFecha(g.fecha)}</td><td>${g.categoria}${g.ids.length > 1 ? ` <span style="font-size:.7rem;color:var(--muted)">(x${g.ids.length})</span>` : ''}</td><td><span class="badge ${g.tipo === 'fijo' ? 'badge-purple' : 'badge-ink'}">${g.tipo}</span></td><td>${g.descripcion || '—'}</td><td class="mono">${fmt(g.importe)}</td><td>${store.db.cuentas.find(x => x.id === g.cuentaId)?.nombre || 'Varios'}</td><td><button class="btn btn-danger btn-sm" onclick="if(confirm('¿Eliminar registro${g.ids.length > 1 ? 's agrupados' : ''}?')){store.db.gastos=store.db.gastos.filter(x=> !${JSON.stringify(g.ids)}.includes(x.id));/* store.saveDB() removido */window.renderTablaGastos();window.renderFinanzasTotales();}">✕</button></td></tr>`).join('');
+
+    document.getElementById('tabla-gastos').innerHTML = arr.map(g => `<tr><td class="mono">${fmtFecha(g.fecha)}</td><td>${g.categoria}${g.ids.length > 1 ? ` <span style="font-size:.7rem;color:var(--muted)">(x${g.ids.length})</span>` : ''}</td><td><span class="badge ${g.tipo === 'fijo' ? 'badge-purple' : 'badge-ink'}">${g.tipo}</span></td><td>${g.descripcion || '—'}</td><td class="mono">${fmt(g.importe)}</td><td>${store.db.cuentas.find(x => x.id === g.cuentaId)?.nombre || 'Varios'}</td><td><button class="btn btn-danger btn-sm" onclick="if(confirm('¿Eliminar registro${g.ids.length > 1 ? 's agrupados' : ''}?')){ finanzas.eliminarGastos(${JSON.stringify(g.ids).replace(/"/g, "'")}); window.renderTablaGastos(); window.renderFinanzasTotales(); }">✕</button></td></tr>`).join('');
+};
+
+window.renderTablaGastosProgramados = function () {
+    const pendientes = store.db.gastos.filter(g => g.estado === 'pendiente').sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const tbody = document.getElementById('tabla-gastos-pendientes');
+    if (!tbody) return;
+
+    if (pendientes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);">No hay gastos programados pendientes.</td></tr>';
+        return;
+    }
+
+    const opcionesCuentas = store.db.cuentas.filter(c => !c.deleted).map(c => `<option value="${c.id}">${c.nombre} (${fmt(finanzas.calcSaldoCuenta(c.id))})</option>`).join('');
+
+    tbody.innerHTML = pendientes.map(g => `
+        <tr>
+            <td class="mono" style="color:var(--accent); font-weight:bold;">${fmtFecha(g.fecha)}</td>
+            <td>${g.categoria}</td>
+            <td>${g.descripcion || '—'}</td>
+            <td class="mono text-accent" style="font-size:1.1rem;">${fmt(g.importe)}</td>
+            <td><select id="pagar-cuenta-${g.id}" class="form-control form-control-sm" style="max-width:200px;">${opcionesCuentas}</select></td>
+            <td><button class="btn btn-success btn-sm" onclick="window.liquidarGastoProgramado('${g.id}')">💸 Liquidar</button></td>
+        </tr>
+    `).join('');
+};
+
+window.liquidarGastoProgramado = function (id) {
+    try {
+        const cuentaId = document.getElementById('pagar-cuenta-' + id).value;
+        if (!cuentaId) return window.showToast('Debe seleccionar una cuenta para pagar', 'error');
+
+        finanzas.liquidarGastoProgramado(id, cuentaId);
+
+        window.renderTablaGastosProgramados();
+        window.renderTablaGastos();
+        window.renderFinanzasTotales();
+        window.renderCuentas();
+        window.showToast('Gasto liquidado correctamente', 'success');
+    } catch (e) {
+        window.showToast(e.message, 'error');
+    }
 };
 
 // ================= FINANZAS Y CAJA =================
@@ -287,19 +237,119 @@ window.agregarSocio = function () { try { socios.agregar(document.getElementById
 window.eliminarSocio = function (id) { try { if (confirm('¿Eliminar?')) { socios.eliminar(id); /* store.saveDB() removido */ window.renderSocios(); if (typeof window.populateSelects === 'function') window.populateSelects(); window.showToast('Eliminado'); } } catch (e) { window.showToast(e.message, 'error'); } };
 window.registrarMovimientoSocio = function () { try { socios.registrarMovimiento(document.getElementById('mov-socio').value, document.getElementById('mov-tipo').value, document.getElementById('mov-importe').value, document.getElementById('mov-cuenta').value, document.getElementById('mov-fecha').value); /* store.saveDB() removido */ window.renderSocios(); window.renderFinanzasTotales(); window.renderCuentas(); window.showToast('Registrado'); } catch (e) { window.showToast(e.message, 'error'); } };
 window.abrirRetiroSocio = function () { document.getElementById('rs-prod').innerHTML = '<option value="">— Seleccionar —</option>' + store.db.productos.filter(p => !p.deleted && inventario.getStock(p.id) > 0).map(p => `<option value="${p.id}">${p.nombre} (Stock: ${inventario.getStock(p.id)})</option>`).join(''); document.getElementById('modal-retiro-socio').classList.add('open'); };
-window.confirmarRetiroSocio = function () { try { const pId = document.getElementById('rs-prod').value; const qty = parseFloat(document.getElementById('rs-qty').value); if (document.getElementById('rs-accion').value === 'descontar') { const { costoTotal } = inventario.consumirPEPS(pId, qty); socios.registrarMovimiento(document.getElementById('rs-socio').value, 'retiro', costoTotal, '', today()); } else { inventario.consumirParaMuestra(pId, qty, today()); } /* store.saveDB() removido */ if (typeof window.renderTablaProductos === 'function') window.renderTablaProductos(); document.getElementById('modal-retiro-socio').classList.remove('open'); window.showToast('Retiro registrado'); } catch (e) { window.showToast(e.message, 'error'); } };
+window.confirmarRetiroSocio = function () { try { const pId = document.getElementById('rs-prod').value; const qty = parseFloat(document.getElementById('rs-qty').value); if (document.getElementById('rs-accion').value === 'descontar') { const { costoTotal, lotesConsumidos } = inventario.consumirPEPS(pId, qty); socios.registrarMovimiento(document.getElementById('rs-socio').value, 'retiro', costoTotal, '', today(), lotesConsumidos); } else { inventario.consumirParaMuestra(pId, qty, today()); } if (typeof window.renderTablaProductos === 'function') window.renderTablaProductos(); document.getElementById('modal-retiro-socio').classList.remove('open'); window.showToast('Retiro registrado bajo régimen transaccional SQLite'); } catch (e) { window.showToast(e.message, 'error'); } };
 window.renderSocios = function () { document.getElementById('soc-neta').textContent = fmt(finanzas.calcGananciaNetaGlobal()); document.getElementById('soc-disp').textContent = fmt(finanzas.calcGananciaSinAsignar()); document.getElementById('lista-socios').innerHTML = store.db.socios.filter(s => !s.deleted).map(s => { const saldo = finanzas.calcSaldoSocio(s.id); return `<div style="display:inline-flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:.3rem .6rem;margin:.2rem;font-size:.85rem;"><span style="font-weight:600;margin-right:.5rem;">${s.nombre}</span> <span class="badge ${saldo >= 0 ? 'badge-green' : 'badge-red'}">Saldo: ${fmt(saldo)}</span><button onclick="window.eliminarSocio('${s.id}')" style="background:none;border:none;color:var(--alert);cursor:pointer;margin-left:.4rem;font-weight:600;">🗑️</button></div>`; }).join(''); };
 
 // ================= INDICADORES E INFORMES =================
 window.renderIndicadores = function () {
-    const pN = finanzas.getPatrimonioNeto(); const mes = today().slice(0, 7);
-    const gfijos = store.db.gastos.filter(g => g.tipo === 'fijo' && g.fecha.startsWith(mes)).reduce((s, g) => s + g.importe, 0);
-    const vtasM = store.db.ventas.filter(v => v.fecha.startsWith(mes)).reduce((s, v) => s + v.totalVenta, 0);
-    const costM = store.db.ventas.filter(v => v.fecha.startsWith(mes)).reduce((s, v) => s + v.totalCosto, 0);
-    const pEq = vtasM > costM ? gfijos / ((vtasM - costM) / vtasM) : 0;
-    const stockV = store.db.productos.filter(p => !p.deleted).reduce((s, p) => s + (inventario.getStock(p.id) * inventario.getCostoMasAlto(p.id)), 0);
-    const rot = stockV > 0 ? (store.db.ventaItems.reduce((s, vi) => s + vi.costoTotal, 0) / stockV).toFixed(1) : 0;
-    document.getElementById('dash-indicadores').innerHTML = `<div class="stat-card"><div class="stat-label">Patrimonio Neto</div><div class="stat-value">${fmt(pN)}</div></div><div class="stat-card"><div class="stat-label">Pto de Equilibrio (Mes)</div><div class="stat-value">${fmt(pEq)}</div></div><div class="stat-card"><div class="stat-label">Rotación Inventario</div><div class="stat-value">${rot}x</div></div>`;
+    const d = finanzas.getDiagnosticoRatios();
+    const fDec = n => (n === null || isNaN(n)) ? '—' : Number(n).toFixed(2);
+
+    const evaluar = (val, thresholds) => {
+        if (val === null || isNaN(val)) return { icon: '⚪', color: 'var(--muted)', txt: 'Faltan datos' };
+        if (val >= thresholds.verde[0] && val <= thresholds.verde[1]) return { icon: '🟢', color: '#10b981', txt: 'Saludable' };
+        if (val >= thresholds.amarillo[0] && val <= thresholds.amarillo[1]) return { icon: '🟡', color: '#f59e0b', txt: 'Atención' };
+        return { icon: '🔴', color: '#ef4444', txt: 'Riesgo Financiero' };
+    };
+
+    const cards = [
+        {
+            titulo: '💧 Liquidez (Solvencia Corta)',
+            ratios: [
+                {
+                    nom: 'L. Corriente', val: fDec(d.liquidez.corriente), ev: evaluar(d.liquidez.corriente, { verde: [1.5, 999], amarillo: [1.0, 1.49] }),
+                    info: 'Mide si tienes activos cortos (Caja + Stock + Fiados) para pagar tus deudas a proveedores de inmediato. Por cada $1 que debes, tenés este monto para afrontarlo.'
+                },
+                {
+                    nom: 'L. Ácida', val: fDec(d.liquidez.acida), ev: evaluar(d.liquidez.acida, { verde: [1.0, 999], amarillo: [0.5, 0.99] }),
+                    info: 'Prueba suprema: si mañana cae un misil y no lográs vender NINGÚN producto nuevo del inventario, ¿todavía podés pagar la deuda solo juntando efectivo y cobrando fiados?'
+                },
+                {
+                    nom: 'L. Inmediata', val: fDec(d.liquidez.inmediata), ev: evaluar(d.liquidez.inmediata, { verde: [0.3, 999], amarillo: [0.1, 0.29] }),
+                    info: 'El efectivo instantáneo hoy en cajas o cuentas bancarias comparado contra tus deudas.'
+                }
+            ]
+        },
+        {
+            titulo: '📦 Administración de Activos',
+            ratios: [
+                {
+                    nom: 'Rot. de Inventario', val: fDec(d.activos.rotacionInventarios) + 'x', ev: evaluar(d.activos.rotacionInventarios, { verde: [2.0, 999], amarillo: [1.0, 1.99] }),
+                    info: 'Cuántas veces vacías y vuelves a llenar tu estantería entera al mes (Venta Real mensual vs Stock Total). Si es < 1, significa que acumulas mercadería estancada.'
+                },
+                {
+                    nom: 'Días Cobranza', val: fDec(d.activos.diasCobranza) + 'd', ev: evaluar(d.activos.diasCobranza ? -d.activos.diasCobranza : null, { verde: [-30, 0], amarillo: [-60, -31] }),
+                    info: '¿Cuántos días tarda en promedio tus clientes en pagarte el fiado de Cuentas Corrientes?'
+                },
+                {
+                    nom: 'Días Pago', val: fDec(d.activos.diasPago) + 'd', ev: evaluar(d.activos.diasPago, { verde: [0, 999], amarillo: [0, 0] }),
+                    info: '¿Cuántos días tardas TÚ en pagarle al proveedor? Truco: Lo ideal es que siempre cobres tu fiado (Días Cobranza) más rápido de lo que le pagas a tu proveedor (Días Pago).'
+                }
+            ]
+        },
+        {
+            titulo: '🏦 Admnistración de Deuda',
+            ratios: [
+                {
+                    nom: 'Nivel Endeudamiento', val: fDec(d.deudas.nivel * 100) + '%', ev: evaluar(d.deudas.nivel, { verde: [0, 0.50], amarillo: [0.51, 0.70] }),
+                    info: 'Del 100% de los bienes que hay en tu local... ¿Qué porcentaje le pertenece a la deuda que tenés tomada con los Proveedores? Recomendación: Mantener por debajo del 50%.'
+                },
+                {
+                    nom: 'Cobertura Intereses', val: d.deudas.cobertura === -1 ? 'S/D' : fDec(d.deudas.cobertura) + 'x', ev: evaluar(d.deudas.cobertura, { verde: [3.0, 999], amarillo: [1.5, 2.99] }),
+                    info: 'Por cada 1 peso que debes pagarle al sistema financiero en Banco/Comisiones, ¿cuántas veces podés pagarlo de sobra con tu ganancia normal neta?'
+                }
+            ]
+        },
+        {
+            titulo: '📈 Rentabilidad (30 Días)',
+            ratios: [
+                {
+                    nom: 'Margen ROS', val: fDec(d.rentabilidad.ventasROS) + '%', ev: evaluar(d.rentabilidad.ventasROS, { verde: [15.0, 100], amarillo: [5.0, 14.99] }),
+                    info: 'Rentabilidad Operativa (ROS). Por cada 100 pesos brutos que lográs vendar al mes en la caja registradora, ¿cuántos pesos puros terminan de verdad en tu bolsillo de ganancia?'
+                },
+                {
+                    nom: 'Rendimiento ROE', val: fDec(d.rentabilidad.netaROE) + '%', ev: evaluar(d.rentabilidad.netaROE, { verde: [5.0, 100], amarillo: [1.0, 4.99] }),
+                    info: 'Rentabilidad Neta Patrimonial. Indicador estrella de inversores: ¿cuánto porcentaje le saqué a la plata invertida este mes? Comparalo mes a mes con la tasa de un Plazo Fijo.'
+                },
+                {
+                    nom: 'Pto. Equilibrio', val: fmt(d.rentabilidad.puntoEquilibrio), ev: { icon: '⚖️', color: 'var(--blue)', txt: 'Meta Básica' },
+                    info: 'El volumen exacto de dinero que tenés que vender en la caja para quedar en EMPATE 0. Si vendés menos que esto, perdés plata.'
+                }
+            ]
+        }
+    ];
+
+    let html = `<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; width: 100%; margin-bottom:1rem;">`;
+
+    cards.forEach(c => {
+        html += `<div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            <div style="font-weight:700; color:var(--ink); font-size:1rem; margin-bottom:1rem; border-bottom:1px solid var(--border); padding-bottom:.5rem;">${c.titulo}</div>
+            <div style="display:flex; flex-direction:column; gap:1rem;">`;
+
+        c.ratios.forEach(r => {
+            html += `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="flex:1;">
+                    <div style="font-size:.85rem; font-weight:600; color:var(--ink);">${r.nom} <span onclick="window.alert('${r.info.replace(/'/g, "\\'")}')" style="cursor:pointer; color:var(--blue); font-size:1.1rem; margin-left:4px;">ⓘ</span></div>
+                    <div style="font-size:.7rem; color:${r.ev.color}; font-weight:600; margin-top:2px;">${r.ev.icon} ${r.ev.txt}</div>
+                </div>
+                <div style="font-size:1.15rem; font-weight:800; font-family:'JetBrains Mono', monospace; color:var(--ink);">${r.val}</div>
+            </div>`;
+        });
+
+        html += `</div></div>`;
+    });
+
+    html += `</div>
+    <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:1.2rem 1.5rem; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+            <div style="font-size:.85rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing: 1px;">Patrimonio Neto Global</div>
+            <div style="font-size:.8rem; color:var(--ink); max-width:500px; margin-top:5px;">El valor puro de tu empresa a día de hoy ($ Caja + $ Mercadería Al Costo + Cta. Cte. Pendientes de Cobro - Dudas Proveedores). Representa tu capital base sólido.</div>
+        </div>
+        <div style="font-size:1.8rem; font-family:'JetBrains Mono', monospace; font-weight:900; color:var(--accent);">${fmt(d.rentabilidad.patrimonio)}</div>
+    </div>`;
+
+    document.getElementById('dash-indicadores').innerHTML = html;
 };
 
 window.generarInforme = function () {

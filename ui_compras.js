@@ -10,14 +10,14 @@ let carritoRemito = [];
 const fmt = n => '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtFecha = iso => { if (!iso) return '—'; const [y, m, d] = iso.split('T')[0].split('-'); return `${d}/${m}/${y}`; };
 
-window.togglePagoCompra = function(val) {
+window.togglePagoCompra = function (val) {
     document.getElementById('comp-cuenta-wrap').style.display = val === 'pagado' ? 'block' : 'none';
 };
 
-window.buscarProdCompra = function() {
+window.buscarProdCompra = function () {
     const bc = document.getElementById('comp-barcode').value.trim();
     if (!bc) return;
-    
+
     // 1. Búsqueda exacta por código
     const prodByCode = store.db.productos.filter(x => !x.deleted).find(p => p.barcode === bc || p.codigo === bc);
     if (prodByCode) {
@@ -37,7 +37,7 @@ window.buscarProdCompra = function() {
     // 3. Resolución: Código nuevo vs. Nombre inexistente
     // Regla estricta: Los códigos no deben contener espacios.
     const esCodigo = !bc.includes(' ');
-    
+
     if (esCodigo) {
         document.getElementById('np-codigo').value = bc;
         document.getElementById('modal-np').classList.add('open');
@@ -51,17 +51,31 @@ window.buscarProdCompra = function() {
 function _seleccionarProd(prod) {
     document.getElementById('comp-prod-nombre').value = prod.nombre + (prod.marca ? ' (' + prod.marca + ')' : '');
     document.getElementById('comp-prod-id').value = prod.id;
+
+    // Feature: Sugerir último precio del proveedor
+    const provId = document.getElementById('comp-proveedor').value;
+    if (provId && store.dao.obtenerUltimoCosto) {
+        const ultimo = store.dao.obtenerUltimoCosto(prod.id, provId);
+        if (ultimo !== null) {
+            document.getElementById('comp-costo-base').value = ultimo;
+            window.calcCostoUnitarioCompra();
+        } else {
+            document.getElementById('comp-costo-base').value = '';
+            window.calcCostoUnitarioCompra(); // Limpiar calculo previo
+        }
+    }
+
     document.getElementById('comp-bultos').focus();
 }
 
-window.guardarNuevoProd = function() {
+window.guardarNuevoProd = function () {
     let codigo = document.getElementById('np-codigo').value.trim();
     const nombre = document.getElementById('np-nombre').value.trim();
     const marca = document.getElementById('np-marca').value.trim();
     const unidad = document.getElementById('np-unidad').value;
-    
+
     if (!nombre) return window.showToast('El nombre del producto es obligatorio', 'error');
-    
+
     // Automatización de EAN-13 si el campo está vacío
     if (!codigo) {
         codigo = compras.generarCodigoInterno();
@@ -70,9 +84,9 @@ window.guardarNuevoProd = function() {
 
     let exist = store.db.productos.find(p => p.codigo === codigo || p.barcode === codigo);
     if (exist && !exist.deleted) return window.showToast('Código ya existe en un producto activo', 'error');
-    
+
     let pId = (exist && exist.deleted) ? exist.id : Date.now().toString();
-    
+
     try {
         // Ejecución de transacciones separadas pero síncronas
         store.dao.guardarProducto({
@@ -91,53 +105,53 @@ window.guardarNuevoProd = function() {
 
         // Sincronización RAM -> SQLite
         store.loadDB();
-        
+
         // Limpieza y foco de Interfaz
         document.getElementById('modal-np').classList.remove('open');
         document.getElementById('comp-prod-nombre').value = nombre;
         document.getElementById('comp-prod-id').value = pId;
         document.getElementById('comp-barcode').value = codigo;
         document.getElementById('comp-bultos').focus();
-        
+
     } catch (error) {
         window.showToast(error.message, 'error');
     }
 };
 
-window.calcCostoUnitarioCompra = function() {
+window.calcCostoUnitarioCompra = function () {
     const bultos = parseFloat(document.getElementById('comp-bultos').value) || 0;
     const uniXBulto = parseFloat(document.getElementById('comp-uni-bulto').value) || 1;
-    
+
     const costoBase = parseFloat(document.getElementById('comp-costo-base').value) || 0;
     const desc = parseFloat(document.getElementById('comp-desc-bulto').value) || 0;
     const impInt = parseFloat(document.getElementById('comp-imp-int').value) || 0;
     const iva = parseFloat(document.getElementById('comp-iva').value) || 0;
-    
+
     // Matemática comercial
     const totalUnidades = bultos * uniXBulto;
     const costoFinalBulto = costoBase - desc + impInt + iva;
-    const costoFinalUnitario = uniXBulto > 0 ? (costoFinalBulto / uniXBulto) : 0; 
+    const costoFinalUnitario = uniXBulto > 0 ? (costoFinalBulto / uniXBulto) : 0;
 
     // Renderizado visual y variables ocultas
     document.getElementById('lbl-total-unidades').textContent = totalUnidades.toFixed(2);
     document.getElementById('lbl-costo-unitario-final').textContent = fmt(costoFinalUnitario);
-    
+
     document.getElementById('comp-cantidad-total-oculta').value = totalUnidades;
     document.getElementById('comp-costo-final-oculto').value = costoFinalUnitario;
 };
 
-window.agregarItemRemito = function() {
+window.agregarItemRemito = function () {
     const pId = document.getElementById('comp-prod-id').value;
     const cant = parseFloat(document.getElementById('comp-cantidad-total-oculta').value);
     const costo = parseFloat(document.getElementById('comp-costo-final-oculto').value);
     const venc = document.getElementById('comp-venc').value;
-    
+
     if (!pId || !cant || isNaN(costo) || costo <= 0) return window.showToast('Faltan datos del producto o el costo es inválido', 'error');
     const p = store.db.productos.find(x => x.id === pId);
-    
+
     carritoRemito.push({ productoId: pId, codigo: p.codigo, nombre: p.nombre, cantidad: cant, costoUnitario: costo, vencimiento: venc });
     window.renderTablaRemito();
-    
+
     // Limpieza de inputs post-carga
     ['comp-barcode', 'comp-prod-nombre', 'comp-prod-id', 'comp-costo-base', 'comp-desc-bulto', 'comp-imp-int', 'comp-iva', 'comp-venc'].forEach(i => {
         const el = document.getElementById(i);
@@ -146,16 +160,16 @@ window.agregarItemRemito = function() {
     document.getElementById('comp-bultos').value = '1';
     document.getElementById('comp-uni-bulto').value = '1';
     window.calcCostoUnitarioCompra(); // Resetea visualmente la calculadora
-    
+
     document.getElementById('comp-barcode').focus();
 };
 
-window.quitarItemRemito = function(idx) {
+window.quitarItemRemito = function (idx) {
     carritoRemito.splice(idx, 1);
     window.renderTablaRemito();
 };
 
-window.renderTablaRemito = function() {
+window.renderTablaRemito = function () {
     let total = 0;
     document.getElementById('tabla-remito-items').innerHTML = carritoRemito.map((item, i) => {
         const sub = item.cantidad * item.costoUnitario; total += sub;
@@ -164,7 +178,7 @@ window.renderTablaRemito = function() {
     document.getElementById('comp-total-remito').textContent = fmt(total);
 };
 
-window.confirmarRemitoCompleto = function() {
+window.confirmarRemitoCompleto = function () {
     try {
         compras.registrarRemito(
             document.getElementById('comp-proveedor').value,
@@ -177,7 +191,7 @@ window.confirmarRemitoCompleto = function() {
         /* store.saveDB() removido */
         if (typeof window.populateSelects === 'function') window.populateSelects();
         window.showToast('Remito registrado con éxito');
-        
+
         carritoRemito = [];
         window.renderTablaRemito();
         document.getElementById('comp-comprobante').value = '';

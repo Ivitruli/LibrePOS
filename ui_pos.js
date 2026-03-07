@@ -151,40 +151,100 @@ window.confirmarVenta = function () {
 
     // 3. Motor PEPS (Primeras Entradas, Primeras Salidas)
     for (const item of store.carrito) {
-        let cantRequerida = parseFloat(item.cantidad);
-        let costoCMV = 0;
+        if (item.isPromo && item.items) {
+            // Desempaquetado del Combo para cumplir FK y descontar Stock físico real
+            let precioComboRestante = item.precioVenta * item.cantidad;
+            let totalBasePrice = 0;
 
-        const lotesDelProducto = lotesSimulados
-            .filter(l => l.productoId === item.productoId && l.cantDisponible > 0)
-            .sort((a, b) => a.fecha.localeCompare(b.fecha));
+            const subItems = item.items.map(sub => {
+                const baseP = inventario.calcPrecioFinal(sub.id) || 1;
+                totalBasePrice += baseP * sub.cantidad;
+                return { ...sub, base: baseP, req: sub.cantidad * item.cantidad };
+            });
 
-        for (const lote of lotesDelProducto) {
-            if (cantRequerida <= 0) break;
-            const aDescontar = Math.min(lote.cantDisponible, cantRequerida);
+            for (let i = 0; i < subItems.length; i++) {
+                const sub = subItems[i];
+                let cantRequerida = parseFloat(sub.req);
+                let costoCMV = 0;
 
-            lotesConsumidos.push({ loteId: lote.id, cantidad: aDescontar });
+                const lotesDelProducto = lotesSimulados
+                    .filter(l => l.productoId === sub.id && l.cantDisponible > 0)
+                    .sort((a, b) => a.fecha.localeCompare(b.fecha));
 
-            costoCMV += (aDescontar * lote.costoUnit);
-            cantRequerida -= aDescontar;
-            lote.cantDisponible -= aDescontar;
+                for (const lote of lotesDelProducto) {
+                    if (cantRequerida <= 0) break;
+                    const aDescontar = Math.min(lote.cantDisponible, cantRequerida);
+                    lotesConsumidos.push({ loteId: lote.id, cantidad: aDescontar });
+                    costoCMV += (aDescontar * lote.costoUnit);
+                    cantRequerida -= aDescontar;
+                    lote.cantDisponible -= aDescontar;
+                }
+
+                if (cantRequerida > 0.001) {
+                    return window.showToast(`Stock físico insuficiente de ${sub.nombre} para facturar este combo.`, 'error');
+                }
+
+                totalCosto += costoCMV;
+
+                // Prorrateamos de forma proporcional el Precio Final del Combo
+                let precioVentaSub = 0;
+                if (i === subItems.length - 1) {
+                    precioVentaSub = Math.max(0, precioComboRestante); // Último absorbe diferencias de centavos
+                } else {
+                    const weight = (sub.base * sub.cantidad) / totalBasePrice;
+                    precioVentaSub = Math.round((item.precioVenta * item.cantidad) * weight * 100) / 100;
+                    precioComboRestante -= precioVentaSub;
+                }
+
+                const dbProd = store.db.productos.find(p => p.id === sub.id);
+
+                itemsTransaccion.push({
+                    productoId: sub.id,
+                    nombre: `(Combo) ${sub.nombre}`,
+                    unidad: dbProd ? dbProd.unidad : 'u',
+                    cantidad: sub.req,
+                    precioVenta: sub.req > 0 ? parseFloat((precioVentaSub / sub.req).toFixed(2)) : 0,
+                    costoTotal: costoCMV,
+                    isPromo: 1
+                });
+            }
+        } else {
+            // Flujo Normal para Productos Individuales
+            let cantRequerida = parseFloat(item.cantidad);
+            let costoCMV = 0;
+
+            const lotesDelProducto = lotesSimulados
+                .filter(l => l.productoId === item.productoId && l.cantDisponible > 0)
+                .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+            for (const lote of lotesDelProducto) {
+                if (cantRequerida <= 0) break;
+                const aDescontar = Math.min(lote.cantDisponible, cantRequerida);
+
+                lotesConsumidos.push({ loteId: lote.id, cantidad: aDescontar });
+
+                costoCMV += (aDescontar * lote.costoUnit);
+                cantRequerida -= aDescontar;
+                lote.cantDisponible -= aDescontar;
+            }
+
+            // INTEGRIDAD ACID: Bloqueo de venta si falta stock físico
+            if (cantRequerida > 0.001) {
+                return window.showToast(`Stock físico insuficiente para: ${item.nombre}. Faltan ${cantRequerida.toFixed(2)} u.`, 'error');
+            }
+
+            totalCosto += costoCMV;
+
+            itemsTransaccion.push({
+                productoId: item.productoId,
+                nombre: item.nombre,
+                unidad: item.unidad || 'u',
+                cantidad: item.cantidad,
+                precioVenta: item.precioFinal || item.precioVenta || item.precio,
+                costoTotal: costoCMV,
+                isPromo: item.isPromo ? 1 : 0
+            });
         }
-
-        // INTEGRIDAD ACID: Bloqueo de venta si falta stock físico
-        if (cantRequerida > 0.001) {
-            return window.showToast(`Stock físico insuficiente para: ${item.nombre}. Faltan ${cantRequerida.toFixed(2)} u.`, 'error');
-        }
-
-        totalCosto += costoCMV;
-
-        itemsTransaccion.push({
-            productoId: item.productoId,
-            nombre: item.nombre,
-            unidad: item.unidad || 'u',
-            cantidad: item.cantidad,
-            precioVenta: item.precioFinal || item.precioVenta || item.precio,
-            costoTotal: costoCMV,
-            isPromo: item.isPromo ? 1 : 0
-        });
     }
 
     // 4. Captura exacta utilizando el motor matemático (Evita errores de formato de texto)
@@ -294,6 +354,12 @@ window.uiActualizarTotalPOS = function () {
         document.getElementById('cart-total-sin-desc-row').style.display = 'none';
     }
     document.getElementById('cart-total').innerText = `$${calculo.totalFinal.toFixed(2)}`;
+
+    // ALERTA DE VENTA A PÉRDIDA
+    const alertaCmv = document.getElementById('cart-alerta-cmv');
+    if (alertaCmv) {
+        alertaCmv.style.display = calculo.isVentaBajoCosto ? 'block' : 'none';
+    }
 };
 
 window.uiAplicarRedondeo = function () {
@@ -367,5 +433,163 @@ setTimeout(() => {
     if (typeof window.renderProductGrid === 'function') window.renderProductGrid();
     if (typeof window.renderCarrito === 'function') window.renderCarrito();
 }, 150);
+
+// --- MÓDULO KIT DINÁMICO (Caja POS) ---
+window.uiPosKit = {
+    insumosPendientes: [],
+
+    abrirModalKit: function () {
+        this.insumosPendientes = [];
+        document.getElementById('kit-nombre').value = '';
+        document.getElementById('kit-precio-final').value = '';
+        document.getElementById('kit-search').value = '';
+
+        this.renderTablaInsumos();
+        document.getElementById('modal-kit-dinamico').classList.add('open');
+        this.configurarBuscadorInsumos();
+    },
+
+    configurarBuscadorInsumos: function () {
+        const searchInput = document.getElementById('kit-search');
+        const resultsDiv = document.getElementById('kit-search-results');
+
+        const newSearchInput = searchInput.cloneNode(true);
+        searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+
+        newSearchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            if (query.length < 2) {
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+
+            const coincidencias = store.db.productos.filter(p => !p.deleted && (p.nombre.toLowerCase().includes(query) || (p.codigo && p.codigo.includes(query))));
+
+            if (coincidencias.length === 0) {
+                resultsDiv.innerHTML = '<div class="p-sm text-muted">No hay resultados</div>';
+            } else {
+                resultsDiv.innerHTML = coincidencias.slice(0, 10).map(p => `
+                    <div class="autocomplete-item" onclick="window.uiPosKit.seleccionarInsumoBusqueda('${p.id}', '${p.nombre.replace(/'/g, "\\'")}', '${p.unidad}')">
+                        ${p.nombre} <span class="text-muted" style="font-size: 0.8em">(${p.unidad || 'Unidad'})</span>
+                    </div>
+                `).join('');
+            }
+            resultsDiv.classList.remove('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!newSearchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+                resultsDiv.classList.add('hidden');
+            }
+        });
+    },
+
+    seleccionarInsumoBusqueda: function (idProd, nombreProd, unidad) {
+        document.getElementById('kit-search').value = nombreProd;
+        document.getElementById('kit-search').dataset.prodId = idProd;
+        document.getElementById('kit-search').dataset.unidad = unidad;
+        document.getElementById('kit-search-results').classList.add('hidden');
+        document.getElementById('kit-qty').focus();
+    },
+
+    agregarInsumoPendiente: function () {
+        const inputBusqueda = document.getElementById('kit-search');
+        const pid = inputBusqueda.dataset.prodId;
+        const nombre = inputBusqueda.value;
+        const unidad = inputBusqueda.dataset.unidad || 'unidad';
+        const cant = parseFloat(document.getElementById('kit-qty').value);
+
+        if (!pid || !nombre) return window.showToast('Buscá y seleccioná un producto primero', 'error');
+        if (isNaN(cant) || cant <= 0) return window.showToast('Cantidad inválida', 'error');
+
+        const existente = this.insumosPendientes.find(p => p.id === pid);
+        if (existente) {
+            existente.cantidad += cant;
+        } else {
+            this.insumosPendientes.push({ id: pid, nombre: nombre, cantidad: cant, unidad: unidad });
+        }
+
+        inputBusqueda.value = '';
+        delete inputBusqueda.dataset.prodId;
+        delete inputBusqueda.dataset.unidad;
+        document.getElementById('kit-qty').value = '1';
+
+        this.renderTablaInsumos();
+    },
+
+    quitarInsumoPendiente: function (pid) {
+        this.insumosPendientes = this.insumosPendientes.filter(p => p.id !== pid);
+        this.renderTablaInsumos();
+    },
+
+    renderTablaInsumos: function () {
+        const tbody = document.getElementById('kit-items-tbody');
+        const inventario = require('./inventario.js');
+
+        if (this.insumosPendientes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Añadí insumos físicos que componen este Kit.</td></tr>';
+            document.getElementById('kit-cmv-total').textContent = '$0.00';
+            return;
+        }
+
+        let totalCMV = 0;
+        tbody.innerHTML = this.insumosPendientes.map(item => {
+            const costoReferencia = inventario.getCostoMasAlto(item.id) || 0;
+            const subtotalCMV = costoReferencia * item.cantidad;
+            totalCMV += subtotalCMV;
+
+            return `
+                <tr>
+                    <td>${item.nombre}</td>
+                    <td class="mono font-bold">${item.cantidad} ${item.unidad === 'kg' ? 'kg' : 'u'}</td>
+                    <td class="mono text-red">${fmt(subtotalCMV)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger text-xs inner-btn" title="Quitar" onclick="window.uiPosKit.quitarInsumoPendiente('${item.id}')">✕</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        document.getElementById('kit-cmv-total').textContent = fmt(totalCMV);
+    },
+
+    cerrarModalKit: function () {
+        document.getElementById('modal-kit-dinamico').classList.remove('open');
+    },
+
+    inyectarKitAlCarrito: function () {
+        const nombreKit = document.getElementById('kit-nombre').value.trim();
+        const precioGlobal = parseFloat(document.getElementById('kit-precio-final').value);
+
+        if (!nombreKit) return window.showToast('Ingresá un nombre identificatorio para el Kit', 'error');
+        if (isNaN(precioGlobal) || precioGlobal < 0) return window.showToast('Ingresá un precio de venta global válido', 'error');
+        if (this.insumosPendientes.length === 0) return window.showToast('El Kit debe tener al menos un producto asociado', 'error');
+
+        // Check stock availability
+        const inventario = require('./inventario.js');
+        for (const sub of this.insumosPendientes) {
+            if (inventario.getStock(sub.id) < sub.cantidad) {
+                return window.showToast(`Stock limitado de ${sub.nombre} (${inventario.getStock(sub.id)} disp)`, 'error');
+            }
+        }
+
+        const pseudoId = 'kit_' + Date.now();
+
+        // Inyectar en Carrito marcando isPromo en true
+        store.carrito.push({
+            productoId: pseudoId,
+            nombre: "📦 " + nombreKit,
+            unidad: 'combo',
+            cantidad: 1,
+            precioVenta: precioGlobal,
+            isPromo: true,
+            items: JSON.parse(JSON.stringify(this.insumosPendientes))
+        });
+
+        window.showToast('Kit dinámico armado y añadido a la cesta');
+        this.cerrarModalKit();
+        window.renderCarrito();
+    }
+};
 
 module.exports = {};
